@@ -6,11 +6,17 @@
 - 代码：`Content/Python/core`
 - 测试：`Content/Python/core/tests`
 
-## 依赖安装（PowerShell）
+## 创建并使用虚拟环境（PowerShell）
 
 ```powershell
 # 进入仓库根目录
 cd c:\Work\Unreal\ToolTest\Plugins\AssetCustoms
+
+# 创建虚拟环境（首次执行）
+python -m venv .venv
+
+# 激活虚拟环境
+.\.venv\Scripts\Activate.ps1
 
 # 安装开发/测试依赖（不影响 Unreal 环境）
 python -m pip install -r requirements-dev.txt
