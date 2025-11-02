@@ -46,3 +46,31 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - 架构说明见：[docs/architecture.md](./architecture.md)
 - 详细需求规格（V1.1）：[docs/requirements_v1.1.md](./requirements_v1.1.md)
 - 决策记录示例：[docs/decisions/ADR-0001.md](./decisions/ADR-0001.md)
+
+## 开发计划（v1.1 拆分）
+
+M1 架构拆分与底座
+- 建立 `core` 与 `unreal_integration` 目录与最小可用 API。
+- 定义核心 API：`core.textures.layer_merge.merge_layers`、`core.config.loader.load_config`。
+- 适配层最小管道：从 Texture 读取像素 -> 调用核心 -> 回写结果（占位实现）。
+- 基础单元测试（纯 Python）。
+
+M2 贴图图层合并（核心能力）
+- 支持基础混合模式：Normal/Multiply/Screen/Overlay/Add/Subtract。
+- 支持图层不透明度、尺寸对齐与背景色。
+- 性能基线与回退路径（无 numpy 时可用但较慢）。
+
+M3 配置解析（核心能力）
+- 定义配置 Schema 与默认值。
+- JSON 为默认实现，YAML 作为可选扩展（后续）。
+- 支持从路径、字符串、字典载入；校验与错误报告。
+
+M4 Unreal 集成
+- Texture2D/RenderTarget 像素桥接。
+- 项目设置映射为核心配置。
+- 端到端示例命令与日志。
+
+验收标准
+- 纯 Python 核心可在无 Unreal 环境下运行与测试。
+- Unreal 中可调用适配层完成简单的图层合并管道。
+- 文档包含模块边界、API 约定与示例。

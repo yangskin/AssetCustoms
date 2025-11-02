@@ -233,6 +233,20 @@ class AssetCustomsUI:
             self.register_entry(e)
         self.menus.refresh_all_widgets()
 
+
+# 可选：在 Unreal 环境中暴露常用入口，便于按钮或命令行调用
+try:
+    # 纯 Python 核心（无 Unreal 依赖）
+    from core.textures.layer_merge import BlendMode  # noqa: F401
+    # Unreal 适配层
+    from unreal_integration import (  # noqa: F401
+        merge_textures_in_unreal,
+        load_project_config,
+    )
+except Exception:
+    # 在非 Unreal 或部分依赖缺失时保持加载不报错
+    pass
+
     def unregister_all(self) -> None:
         """可选：卸载所有已注册条目（便于调试/热重载）。"""
         # 根据 entries 反注册

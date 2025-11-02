@@ -89,3 +89,19 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 - 路线图：[docs/roadmap.md](./roadmap.md)
 - 需求规格（V1.1）：[./requirements_v1.1.md](./requirements_v1.1.md)
 - 编码规范（Google Python）：[../standards/coding-style.md](../standards/coding-style.md)
+
+## 模块拆分与边界（v1.1）
+
+为提升可测试性与可复用性，代码分为两层：
+
+- 核心模块（pure Python）：`Content/Python/core`
+  - 无 Unreal 依赖，可在本地/CI 独立运行与测试。
+  - 领域能力：贴图图层合并（`core/textures/layer_merge.py`）、配置解析（`core/config/{schema,loader}.py`）。
+
+- Unreal 适配层：`Content/Python/unreal_integration`
+  - 负责桥接 Unreal API，将 Texture/设置转为核心模块可消费的数据结构。
+  - 不包含业务算法，仅做 IO/类型适配与落地（像素读取/写回、项目设置读取等）。
+
+依赖方向：`unreal_integration -> core`，禁止反向依赖。
+
+集成方式：`init_unreal.py` 仅注册 UI/入口，并按需导出 `BlendMode`、`merge_textures_in_unreal`、`load_project_config` 等常用 API。
