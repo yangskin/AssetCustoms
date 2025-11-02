@@ -17,6 +17,10 @@
 - 目标：提供围绕 UE 的资产处理与自动化能力（Python 脚本）。
 - 范围：轻依赖、可扩展、以文档与规范先行，功能增量演进。
 
+## 开发与测试
+- 核心代码（纯 Python）：`Content/Python/core`，可在无 Unreal 环境下测试与开发。
+- 运行测试与依赖说明见：[`docs/testing.md`](docs/testing.md)
+
 ## 开发提示（初稿）
 - 在 UE Editor 中加载插件时会调用 `init_unreal.py`；确保日志可见性良好。
 - 变更公共行为时请更新文档，并考虑补充 ADR。
