@@ -1,0 +1,28 @@
+# Unreal Engine plugin ignores
+Binaries/
+Intermediate/
+Saved/
+DerivedDataCache/
+
+# Build artifacts (optional for plugins)
+Build/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+*.log
+
+# IDEs
+.vscode/
+.vs/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Misc
+*.tmp
+~$*
