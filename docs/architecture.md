@@ -105,3 +105,8 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 依赖方向：`unreal_integration -> core`，禁止反向依赖。
 
 集成方式：`init_unreal.py` 仅注册 UI/入口，并按需导出 `BlendMode`、`merge_textures_in_unreal`、`load_project_config` 等常用 API。
+
+### 近期实现要点（同步）
+- 文件对话框：当前使用 tkinter 的 `filedialog.askopenfilenames` 作为统一方案，仅选择 .fbx（开发期更轻量，跨平台）；不再依赖 `EditorDialog`/`DesktopPlatform` 回退。
+- 配置：实现轻量 JSONC 解析器（优先 `json5`，否则剥离注释+尾逗号），并提供 `load_config()` 将 `.jsonc/.json` 解析为 `PluginConfig` 数据类。
+- 默认配置：新增 `Content/Config/AssetCustoms/Prop.jsonc`，可作为 Profile 被扫描。

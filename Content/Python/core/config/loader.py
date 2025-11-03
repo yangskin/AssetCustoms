@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, Optional, Union
 from core.textures.layer_merge import BlendMode
 from .schema import PluginConfig, TextureMergeDefaults
+from .jsonc import load_jsonc_file, loads_jsonc
 
 
 def _merge_dict(d: Dict[str, Any], u: Dict[str, Any]) -> Dict[str, Any]:
@@ -32,10 +33,21 @@ def load_config_from_dict(data: Dict[str, Any], base: Optional[PluginConfig] = N
 
 def load_config(src: Union[str, Dict[str, Any]], base: Optional[PluginConfig] = None) -> PluginConfig:
     """
-    从文件路径（.json）或字典载入配置，并合并到默认配置。
+    从文件路径（.jsonc/.json）或字典载入配置，并合并到默认配置。
+    - 优先尝试 JSONC（json5 或注释剥离），失败再退回标准 JSON。
     """
     if isinstance(src, dict):
         return load_config_from_dict(src, base)
-    with open(src, "r", encoding="utf-8") as f:
-        data = json.load(f)
+
+    try:
+        # 优先尝试 JSONC（对 .jsonc 与多数 .json 也适用）
+        data = load_jsonc_file(src)
+    except Exception:
+        with open(src, "r", encoding="utf-8") as f:
+            text = f.read()
+        try:
+            data = json.loads(text)
+        except Exception:
+            # 即便扩展名是 .json，也尝试 JSONC 解析一次
+            data = loads_jsonc(text)
     return load_config_from_dict(data, base)

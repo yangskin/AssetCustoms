@@ -247,18 +247,111 @@ except Exception:
     # 在非 Unreal 或部分依赖缺失时保持加载不报错
     pass
 
-    def unregister_all(self) -> None:
-        """可选：卸载所有已注册条目（便于调试/热重载）。"""
-        # 根据 entries 反注册
-        for _key, e in (self.cfg.get("entries") or {}).items():
-            name = e.get("name")
-            if not name:
-                continue
-            is_toolbar = bool(e.get("is_toolbar", False))
-            menu_path = e.get("menu_path") or (self.cfg.get("toolbar_menu_path") if is_toolbar else self.cfg.get("asset_menu_path"))
-            menu = self.menus.extend_menu(menu_path)
+
+# ===== 最小 Actions 实现与工具栏按钮：Content Browser 上添加 “Import FBX…” 按钮 =====
+class AssetCustomsActions:
+    """存放按钮回调的业务方法。此类应尽量不依赖全局状态。"""
+
+    def __init__(self, cfg: dict | None = None) -> None:
+        self.cfg = cfg or {}
+
+    # ---- 工具方法 ----
+    def _get_content_browser_path(self) -> str:
+        """返回当前 Content Browser 路径，若无选择则返回 /Game。"""
+        try:
+            editor_util = unreal.EditorUtilityLibrary()
+            selected_path = editor_util.get_current_content_browser_path()
+            return selected_path or "/Game"
+        except Exception:
+            return "/Game"
+
+    def _tk_open_files(self, title: str, filetypes: list[tuple[str, str]]) -> list[str]:
+        """优先使用 tkinter 打开文件选择对话框（多选）。失败则返回空列表。
+
+        示例 filetypes：[("FBX files", "*.fbx"), ("All files", "*.*")]
+        """
+        try:
+            import tkinter as tk  # type: ignore
+            from tkinter import filedialog  # type: ignore
+
+            root = tk.Tk()
+            root.withdraw()  # 隐藏主窗口，仅展示对话框
+            files = filedialog.askopenfilenames(title=title, filetypes=filetypes)
             try:
-                menu.remove_entry(self.cfg["section"], name)
+                root.destroy()
             except Exception:
                 pass
-        self.menus.refresh_all_widgets()
+            # askopenfilenames 可能返回元组或空字符串
+            if not files:
+                return []
+            return [str(p) for p in (files if isinstance(files, (list, tuple)) else [files])]
+        except Exception as ex:
+            try:
+                unreal.log_warning(f"[AssetCustoms] tkinter 对话框不可用，回退到 Editor 对话框。原因: {ex}")
+            except Exception:
+                pass
+            return []
+
+    def _open_fbx_file_dialog(self) -> list[str]:
+        """使用 tkinter 打开仅 .fbx 的文件选择对话框，返回所选路径列表（可能为空）。"""
+        tk_files = self._tk_open_files(
+            title="Select FBX",
+            filetypes=[("FBX files", "*.fbx"), ("All files", "*.*")],
+        )
+        if tk_files:
+            return tk_files
+        unreal.log_error("[AssetCustoms] 未选择文件或 tkinter 不可用，已取消操作。")
+        return []
+
+    # ---- 按钮回调 ----
+    def on_pick_fbx(self) -> None:
+        content_path = self._get_content_browser_path()
+        unreal.log(f"[AssetCustoms] Current Content Browser Path: {content_path}")
+
+        paths = self._open_fbx_file_dialog()
+        if not paths:
+            return
+        # 仅取第一项；后续可扩展批量
+        fbx_path = paths[0]
+        unreal.log(f"[AssetCustoms] FBX selected: {fbx_path}")
+        # TODO: 可在此触发后续导入流程（FR2），当前仅完成选择与日志显示
+
+
+# ===== 运行时 CONFIG：注册 Content Browser 工具栏按钮 =====
+CONFIG = {
+    "module_alias": "asset_customs",
+    "singleton_attr": "ASSET_CUSTOMS_UI",
+    "section": "AssetCustoms",
+    "asset_menu_path": "ContentBrowser.AssetContextMenu",
+    "toolbar_menu_path": "ContentBrowser.Toolbar",
+    "entries": {
+        "toolbar_import_fbx": {
+            "name": "AssetCustoms.Toolbar.ImportFBX",
+            "label": "Import FBX…",
+            "tooltip": "Pick an FBX file from disk",
+            "icon": {"style_set": "EditorStyle", "style_name": "ClassIcon.StaticMesh"},
+            "callback": "on_pick_fbx",
+            "is_toolbar": True,
+            "menu_path": "ContentBrowser.Toolbar",
+        }
+    },
+    "auto_register": True,
+}
+
+# 自动注册（利用上面的示例流程）
+if CONFIG.get("auto_register", False):
+    try:
+        import sys as _sys
+
+        _alias = CONFIG.get("module_alias") or "asset_customs"
+        _sys.modules[_alias] = _sys.modules.get(__name__)
+
+        ASSET_CUSTOMS_UI = AssetCustomsUI(CONFIG, AssetCustomsActions)
+        ASSET_CUSTOMS_UI.register_all()
+        try:
+            setattr(unreal, CONFIG.get("singleton_attr") or "ASSET_CUSTOMS_UI", ASSET_CUSTOMS_UI)
+        except Exception:
+            pass
+    except Exception as e:
+        unreal.log_error(f"[AssetCustoms] Initialization failed: {e}")
+
