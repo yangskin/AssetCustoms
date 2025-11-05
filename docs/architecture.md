@@ -110,3 +110,18 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 - 文件对话框：当前使用 tkinter 的 `filedialog.askopenfilenames` 作为统一方案，仅选择 .fbx（开发期更轻量，跨平台）；不再依赖 `EditorDialog`/`DesktopPlatform` 回退。
 - 配置：实现轻量 JSONC 解析器（优先 `json5`，否则剥离注释+尾逗号），并提供 `load_config()` 将 `.jsonc/.json` 解析为 `PluginConfig` 数据类。
 - 默认配置：新增 `Content/Config/AssetCustoms/Prop.jsonc`，可作为 Profile 被扫描。
+
+## UI 变更记录（2025-11-05）
+
+- 工具栏入口：由“单一按钮（Import FBX…）”调整为“下拉菜单（AssetCustoms ▼）”。
+- 菜单项来源：自动扫描 `Content/Config/AssetCustoms/*.jsonc`，每个配置文件对应一个菜单项；点击后执行 FBX 选择流程并记录所选预设。
+- 扩展方式：新增配置只需在上述目录放入 `*.jsonc` 文件，无需改动代码；热重载时菜单会自动替换。
+
+### 导入上下文构建（2025-11-05）
+
+- 新增 `unreal_integration.import_context.ImportContext` 数据类：
+  - `fbx_path: str`、`content_path: str`（Content Browser 当前路径）、`profile: PluginConfig`、`profile_path: str`。
+- 新增 `build_import_context(fbx_path, profile_path)`：
+  - 使用 `core.config.loader.load_config()` 解析 `.jsonc/.json` 预设；
+  - 采样当前 Content Browser 路径（失败回退 `/Game`）。
+- UI 回调 `on_pick_fbx_with_preset` 已接入该函数，构建完成后在日志中输出摘要；后续 FR2/FR3 将以此作为统一入口继续执行导入与检查链。

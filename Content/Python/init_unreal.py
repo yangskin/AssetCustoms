@@ -119,6 +119,22 @@ class AssetCustomsUI:
         self._actions = actions_class(config) if actions_class else None
 
     # --- 内部工具 ---
+    def _build_ui_call_with_args(self, method: str, args: list[str] | None = None) -> str:
+        """构造调用 UI 单例方法并传参的命令串。
+        优先从 unreal 模块拿单例；若不存在则尝试按 module_alias 导入并重建。
+        """
+        ui_singleton = self.cfg.get("singleton_attr") or "ASSET_CUSTOMS_UI"
+        mod_alias = (self.cfg.get("module_alias") or (__name__ if __name__ != "__main__" else "init_unreal")).strip()
+        args_src = ", ".join([repr(a) for a in (args or [])])
+        return (
+            "import importlib as _il, unreal as _unreal\n"
+            f"_ui=getattr(_unreal,'{ui_singleton}', None)\n"
+            "if (_ui is None) or (not hasattr(_ui,'call_action_with_args')):\n"
+            f"    try:\n        _m=_il.import_module('{mod_alias}')\n        if not hasattr(_m,'CONFIG'):\n            setattr(_m,'CONFIG',{{}})\n        if hasattr(_m,'AssetCustomsUI'):\n            setattr(_m,'{ui_singleton}', _m.AssetCustomsUI(_m.CONFIG, getattr(_m,'AssetCustomsActions', None)))\n            _ui=getattr(_m,'{ui_singleton}', None)\n            if _ui is not None:\n                setattr(_unreal,'{ui_singleton}', _ui)\n    except Exception:\n        pass\n"
+            f"if _ui and hasattr(_ui,'call_action_with_args'):\n    _ui.call_action_with_args('{method}'{(', ' + args_src) if args_src else ''})\n"
+            "else:\n    _unreal.log_error('[AssetCustoms] UI singleton not available for calling with args')\n"
+        )
+
     def _build_python_command(self, callback_spec: str) -> str:
         """构造可持久的回调调用字符串。
         规则：
@@ -153,6 +169,130 @@ class AssetCustomsUI:
             "import importlib as _il; _m=_il.import_module('" + mod + "'); "
             "getattr(_m, '" + func + "')()"
         )
+
+    def _scan_config_presets(self) -> list[dict]:
+        """扫描配置根目录下的 *.jsonc，返回 [{name,label,path}]。
+        搜索顺序：插件 Content（相对当前脚本）、项目 Content（Paths.project_content_dir）。
+        """
+        try:
+            import os
+            items: list[dict] = []
+
+            # 1) 插件 Content 根（通过当前文件路径回溯）
+            try:
+                _here = os.path.abspath(__file__)
+                _plugin_content = os.path.dirname(os.path.dirname(_here))  # .../Content
+                _cfg_dir = os.path.join(_plugin_content, "Config", "AssetCustoms")
+                if os.path.isdir(_cfg_dir):
+                    for fn in sorted(os.listdir(_cfg_dir)):
+                        if fn.lower().endswith(".jsonc"):
+                            name = os.path.splitext(fn)[0]
+                            items.append({
+                                "name": name,
+                                "label": name,
+                                "path": os.path.join(_cfg_dir, fn),
+                            })
+            except Exception:
+                pass
+
+            # 2) 项目 Content 根
+            try:
+                content_dir = unreal.Paths.project_content_dir()
+                cfg_dir = os.path.join(content_dir, "Config", "AssetCustoms")
+                if os.path.isdir(cfg_dir):
+                    for fn in sorted(os.listdir(cfg_dir)):
+                        if fn.lower().endswith(".jsonc"):
+                            name = os.path.splitext(fn)[0]
+                            path = os.path.join(cfg_dir, fn)
+                            # 去重
+                            if not any(os.path.normcase(x["path"]) == os.path.normcase(path) for x in items):
+                                items.append({
+                                    "name": name,
+                                    "label": name,
+                                    "path": path,
+                                })
+            except Exception:
+                pass
+
+            return items
+        except Exception:
+            return []
+
+    def _register_toolbar_dropdown_from_configs(self) -> None:
+        """在 Content Browser 工具栏注册一个下拉菜单，子项由配置文件 (*.jsonc) 动态生成。"""
+        toolbar_path = self.cfg.get("toolbar_menu_path") or "ContentBrowser.Toolbar"
+        section = self.cfg.get("section") or "AssetCustoms"
+        menu = self.menus.extend_menu(toolbar_path)
+
+        # 定义子菜单
+        submenu_name = self.cfg.get("dropdown_menu_name") or "AssetCustoms.Presets"
+        submenu_label = self.cfg.get("dropdown_label") or "AssetCustoms"
+        submenu_tip = self.cfg.get("dropdown_tooltip") or "AssetCustoms Presets"
+        # 确保节存在（在 Toolbar 下以节为分组）
+        try:
+            menu.add_section(section, section)
+        except Exception:
+            pass
+        try:
+            # 重复注册时，尝试先移除旧的同名子菜单（忽略失败）
+            menu.remove_menu(submenu_name)
+        except Exception:
+            pass
+
+        # 添加子菜单并获取其对象
+        try:
+            sub_menu = menu.add_sub_menu(section, section, submenu_name, submenu_label, submenu_tip)
+        except Exception:
+            # 某些版本返回 None，需要通过名称查找
+            sub_menu = None
+        if not sub_menu:
+            try:
+                sub_menu = self.menus.find_menu(submenu_name)
+            except Exception:
+                sub_menu = None
+        if not sub_menu:
+            # 兜底：直接扩展同名菜单
+            sub_menu = self.menus.extend_menu(submenu_name)
+
+        # 填充子菜单条目
+        presets = self._scan_config_presets()
+        if not presets:
+            # 没有配置文件，放一个只读提示项
+            placeholder = self.make_py_entry(
+                entry_name=f"{section}.NoPreset",
+                label="No Presets Found",
+                tooltip="Put *.jsonc under Content/Config/AssetCustoms",
+                python="import unreal; unreal.log_warning('[AssetCustoms] No presets found')",
+                is_toolbar=False,
+                icon={"style_set": "EditorStyle", "style_name": "Icons.Warning"},
+            )
+            try:
+                sub_menu.add_menu_entry(section, placeholder)
+            except Exception:
+                pass
+            return
+
+        # 清理旧条目（若可用）
+        try:
+            # 无显式 API 清空子菜单，这里以覆盖式 add 方式（同名 remove 再 add）
+            pass
+        except Exception:
+            pass
+
+        for p in presets:
+            py_cmd = self._build_ui_call_with_args("on_pick_fbx_with_preset", [p["path"]])
+            entry = self.make_py_entry(
+                entry_name=f"{section}.Preset.{p['name']}",
+                label=p["label"],
+                tooltip=p["path"],
+                python=py_cmd,
+                is_toolbar=False,
+                icon={"style_set": "EditorStyle", "style_name": "ClassIcon.StaticMesh"},
+            )
+            try:
+                sub_menu.add_menu_entry(section, entry)
+            except Exception:
+                pass
 
     @staticmethod
     def make_py_entry(entry_name: str, label: str, tooltip: str, python: str, *, is_toolbar: bool = False, icon: dict | None = None) -> unreal.ToolMenuEntry:
@@ -225,10 +365,31 @@ class AssetCustomsUI:
         else:
             unreal.log_error(f"[AssetCustoms] Action '{method_name}' not found or not callable")
 
+    def call_action_with_args(self, method_name: str, *args, **kwargs) -> None:
+        """允许带参数的回调调用。"""
+        if not self._actions and self._actions_cls:
+            try:
+                self._actions = self._actions_cls(self.cfg)
+            except Exception as ex:
+                unreal.log_error(f"[AssetCustoms] Failed to create actions: {ex}")
+                return
+        target = getattr(self._actions, method_name, None) if self._actions else None
+        if callable(target):
+            try:
+                target(*args, **kwargs)
+            except Exception as ex:
+                unreal.log_error(f"[AssetCustoms] Action '{method_name}' failed: {ex}")
+        else:
+            unreal.log_error(f"[AssetCustoms] Action '{method_name}' not found or not callable")
+
     # 工具类不包含业务回调，回调移至独立的 Actions 类
 
     def register_all(self) -> None:
         """一次性注册并刷新 UI。"""
+        # 优先：配置驱动的下拉菜单
+        if self.cfg.get("dropdown_from_configs", False):
+            self._register_toolbar_dropdown_from_configs()
+        # 兼容：静态 entries 仍然可用
         for _key, e in (self.cfg.get("entries") or {}).items():
             self.register_entry(e)
         self.menus.refresh_all_widgets()
@@ -259,8 +420,8 @@ class AssetCustomsActions:
     def _get_content_browser_path(self) -> str:
         """返回当前 Content Browser 路径，若无选择则返回 /Game。"""
         try:
-            editor_util = unreal.EditorUtilityLibrary()
-            selected_path = editor_util.get_current_content_browser_path()
+            # UE 5.5+: BlueprintFunctionLibrary 不应实例化，直接调用类方法
+            selected_path = unreal.EditorUtilityLibrary.get_current_content_browser_path()
             return selected_path or "/Game"
         except Exception:
             return "/Game"
@@ -316,6 +477,30 @@ class AssetCustomsActions:
         unreal.log(f"[AssetCustoms] FBX selected: {fbx_path}")
         # TODO: 可在此触发后续导入流程（FR2），当前仅完成选择与日志显示
 
+    def on_pick_fbx_with_preset(self, preset_path: str) -> None:
+        """基于指定预设执行 FBX 选择（当前示例先记录预设路径）。"""
+        unreal.log(f"[AssetCustoms] Preset selected: {preset_path}")
+        # 选择 FBX
+        paths = self._open_fbx_file_dialog()
+        if not paths:
+            return
+        fbx_path = paths[0]
+        unreal.log(f"[AssetCustoms] FBX selected: {fbx_path}")
+
+        # 构建导入上下文（解析 JSONC 预设 + 采样 Content Browser 路径）
+        try:
+            from unreal_integration import build_import_context  # 延迟导入，便于非 Unreal 环境
+
+            ctx = build_import_context(fbx_path=fbx_path, profile_path=preset_path)
+            # 先记录关键信息；后续在 FR2/FR3 接入导入与检查链
+            unreal.log(
+                "[AssetCustoms] ImportContext built: "
+                f"content_path={ctx.content_path}, profile_path={ctx.profile_path}, "
+                f"merge_default={{mode:{ctx.profile.texture_merge.mode.name}, opacity:{ctx.profile.texture_merge.opacity}}}"
+            )
+        except Exception as ex:
+            unreal.log_error(f"[AssetCustoms] Build ImportContext failed: {ex}")
+
 
 # ===== 运行时 CONFIG：注册 Content Browser 工具栏按钮 =====
 CONFIG = {
@@ -324,17 +509,12 @@ CONFIG = {
     "section": "AssetCustoms",
     "asset_menu_path": "ContentBrowser.AssetContextMenu",
     "toolbar_menu_path": "ContentBrowser.Toolbar",
-    "entries": {
-        "toolbar_import_fbx": {
-            "name": "AssetCustoms.Toolbar.ImportFBX",
-            "label": "Import FBX…",
-            "tooltip": "Pick an FBX file from disk",
-            "icon": {"style_set": "EditorStyle", "style_name": "ClassIcon.StaticMesh"},
-            "callback": "on_pick_fbx",
-            "is_toolbar": True,
-            "menu_path": "ContentBrowser.Toolbar",
-        }
-    },
+    # 使用配置驱动的下拉菜单
+    "dropdown_from_configs": True,
+    "dropdown_menu_name": "AssetCustoms.Presets",
+    "dropdown_label": "AssetCustoms",
+    "dropdown_tooltip": "AssetCustoms presets from Content/Config/AssetCustoms",
+    "entries": {},
     "auto_register": True,
 }
 

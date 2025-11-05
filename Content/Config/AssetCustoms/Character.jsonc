@@ -1,0 +1,170 @@
+{
+  // === AssetCustoms（守门员）配置 v1.1（JSON with Comments）===
+  // 注意：
+  // 1) UE 的 Python 环境可能没有 `json5` 库，建议 TA 保存为“无注释的 .json”或工具自行剥离注释。
+  // 2) {占位符} 将在运行时替换：{Name} {Suffix} {Category} {UDIM} {Frame} {DropDir}
+
+  "config_version": "1.1",
+
+  // 可为空字符串 "" 表示“不自动创建材质实例”
+  "default_master_material_path": "/Game/MyProject/Materials/Masters/MM_Prop_PBR.MM_Prop_PBR",
+
+  // 默认落地路径（当 target_path_template 计算失败时使用）
+  "default_fallback_import_path": "/Game/AIGC_Dropoff",
+
+  // UE 资产落地目录模板（建议按品类/资产名分桶）
+  // {Category} 来自 Profile 文件名 (例如 "Prop")
+  "target_path_template": "/Game/Assets/{Category}/{Name}",
+
+  // 命名冲突策略：overwrite | skip | version（自动追加 _001, _002…）
+  "conflict_policy": "version",
+
+  // 资产命名模板（仅影响导入后的 UE 资产名）
+  "asset_naming_template": {
+    "static_mesh": "SM_{Name}",
+    "material_instance": "MI_{Name}",
+    "texture": "T_{Name}_{Suffix}"
+  },
+
+  // === 输入识别规则（从投放目录里把文件匹配到“逻辑位”） ===
+  "texture_input_rules": {
+    // 匹配模式：glob | regex
+    "match_mode": "glob",
+    // 大小写不敏感
+    "ignore_case": true,
+    // 允许的文件扩展名（建议覆盖你团队常用格式）
+    "extensions": [".png", ".tga", ".jpg", ".jpeg", ".exr", ".tif", ".tiff"],
+    // 搜索根目录（{DropDir} 为 FBX 所在的目录）
+    "search_roots": [
+      "{DropDir}",
+      "{DropDir}/Textures",
+      "{DropDir}/Maps"
+    ],
+    // 逻辑位 → 匹配模式（按 priority 取最优命中；多命中时进入分诊/或按优先级取一个）
+    "rules": {
+      "BaseColor":        { "priority": 10, "patterns": ["*_bc*", "*_diffuse*", "*_d*", "*_albedo*"] },
+      "Normal":           { "priority": 10, "patterns": ["*_n*", "*_normal*", "*_nrm*"] },
+      "Roughness":        { "priority": 9,  "patterns": ["*_r*", "*_rough*", "*_roughness*"] },
+      "Metallic":         { "priority": 9,  "patterns": ["*_m*", "*_metal*", "*_metallic*"] },
+      "AmbientOcclusion": { "priority": 8,  "patterns": ["*_ao*", "*_ambientocclusion*"] },
+      "Height":           { "priority": 7,  "patterns": ["*_h*", "*_height*", "*_displacement*"] }
+    }
+  },
+
+  // === 输出贴图定义（任意通道编排；不仅限于 PBR） ===
+  // 每个输出：是否启用、命名后缀、色彩空间、位深、是否生成 Mip、通道映射、UE 导入属性…
+  "texture_output_definitions": [
+    {
+      // --- 漫反射 ---
+      "enabled": true,
+      "output_name": "Diffuse",
+      "suffix": "D",
+      "category": "PBR",
+      "srgb": true,
+      "file_format": "PNG",
+      "bit_depth": 8,
+      "mips": true,
+      "resize": null,
+      "alpha_premultiplied": false,
+      "material_parameter": "BaseColor_Texture",
+      "channels": {
+        "R": { "from": "BaseColor", "ch": "R" },
+        "G": { "from": "BaseColor", "ch": "G" },
+        "B": { "from": "BaseColor", "ch": "B" },
+        "A": { "constant": 1.0 }
+      },
+      "import_settings": {
+        "compression": "TC_Default",
+        "lod_group": "TEXTUREGROUP_World",
+        "virtual_texture": false,
+        "address_x": "Wrap",
+        "address_y": "Wrap",
+        "mip_gen": "FromTextureGroup"
+      }
+    },
+
+    {
+      // --- 法线 ---
+      "enabled": true,
+      "output_name": "Normal",
+      "suffix": "N",
+      "category": "PBR",
+      "srgb": false,
+      "file_format": "PNG",
+      "bit_depth": 8,
+      "mips": true,
+      "material_parameter": "Normal_Texture",
+      "normal_space": "OpenGL",
+      "flip_green": true,
+      "channels": {
+        "R": { "from": "Normal", "ch": "R" },
+        "G": { "from": "Normal", "ch": "G" },
+        "B": { "from": "Normal", "ch": "B" },
+        "A": { "constant": 1.0 }
+      },
+      "import_settings": {
+        "compression": "TC_Normalmap",
+        "lod_group": "TEXTUREGROUP_WorldNormalMap",
+        "virtual_texture": false,
+        "address_x": "Wrap",
+        "address_y": "Wrap",
+        "mip_gen": "FromTextureGroup"
+      }
+    },
+
+    {
+      // --- 金属/粗糙/AO 打包（MRO）---
+      "enabled": true,
+      "output_name": "Packed_MRO",
+      "suffix": "MRO",
+      "category": "PBR",
+      "srgb": false,
+      "file_format": "PNG",
+      "bit_depth": 8,
+      "mips": true,
+      "material_parameter": "Packed_Texture",
+      "allow_missing": true,
+      "channels": {
+        "R": { "from": "Metallic",         "ch": "R", "constant": 0.0 },
+        "G": { "from": "Roughness",        "ch": "R", "constant": 0.5 },
+        "B": { "from": "AmbientOcclusion", "ch": "R", "constant": 1.0 },
+        "A": { "constant": 1.0 }
+      },
+      "import_settings": {
+        "compression": "TC_Masks",
+        "lod_group": "TEXTUREGROUP_World",
+        "virtual_texture": false,
+        "address_x": "Wrap",
+        "address_y": "Wrap",
+        "mip_gen": "FromTextureGroup"
+      }
+    },
+
+    {
+      // --- 高度 ---
+      "enabled": true,
+      "output_name": "Height",
+      "suffix": "H",
+      "category": "PBR",
+      "srgb": false,
+      "file_format": "PNG",
+      "bit_depth": 16,
+      "mips": true,
+      "material_parameter": "Height_Texture",
+      "channels": {
+        "R": { "from": "Height", "ch": "R", "remap": [0.0, 1.0, 0.0, 1.0], "constant": 0.0 },
+        "G": { "from": "Height", "ch": "R", "constant": 0.0 },
+        "B": { "from": "Height", "ch": "R", "constant": 0.0 },
+        "A": { "constant": 1.0 }
+      },
+      "import_settings": {
+        "compression": "TC_Grayscale",
+        "lod_group": "TEXTUREGROUP_World",
+        "virtual_texture": false,
+        "address_x": "Wrap",
+        "address_y": "Wrap",
+        "mip_gen": "FromTextureGroup"
+      }
+    }
+  ]
+}
