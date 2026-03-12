@@ -534,4 +534,4 @@ if CONFIG.get("auto_register", False):
             pass
     except Exception as e:
         unreal.log_error(f"[AssetCustoms] Initialization failed: {e}")
-
+        

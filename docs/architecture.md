@@ -2,6 +2,10 @@
 
 本项目位于 Unreal Engine 插件的 Python 侧，主要用于资源处理与工具自动化，围绕“静默成功，响亮失败”的 UX 模型构建。
 
+> 实现状态（2025-11-11）
+> - 已完成：ToolMenus 工具栏下拉（动态扫描 Content/Config/AssetCustoms/*.jsonc）；tkinter 文件对话框（仅 .fbx）；ImportContext 构建；核心贴图图层合并库（含单测）。
+> - 进行中：Config Schema v1.1 全量字段覆盖；隔离区导入、检查链、分诊 UI、标准化执行引擎与 Unreal 像素桥接。
+
 ## 作用域与边界
 - 边界：仅覆盖 UE Python 脚本与其交互的最小外部接口（Editor、AssetTools、EUL、材质系统、文件对话框）。
 - 非目标：不直接修改 UE C++ 核心；不引入重量级依赖（Pillow、json5 属于轻依赖并随插件内置）。
@@ -110,6 +114,8 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 - 文件对话框：当前使用 tkinter 的 `filedialog.askopenfilenames` 作为统一方案，仅选择 .fbx（开发期更轻量，跨平台）；不再依赖 `EditorDialog`/`DesktopPlatform` 回退。
 - 配置：实现轻量 JSONC 解析器（优先 `json5`，否则剥离注释+尾逗号），并提供 `load_config()` 将 `.jsonc/.json` 解析为 `PluginConfig` 数据类。
 - 默认配置：新增 `Content/Config/AssetCustoms/Prop.jsonc`，可作为 Profile 被扫描。
+
+（更多测试与运行信息见：[docs/testing.md](./testing.md)）
 
 ## UI 变更记录（2025-11-05）
 

@@ -46,3 +46,7 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
 ## 常见问题
 - 若提示 `pytest 未安装`：请确认已执行依赖安装命令。
 - 若导入路径报错：测试已自动将 `Content/Python` 加到 `sys.path`，通常无需手动设置。
+
+## 测试状态（2025-11-11）
+- 环境：Windows / Python 3.11.8 / pytest 8.4.2
+- 结果：6 项测试全部通过（core.config 与 core.textures.layer_merge）

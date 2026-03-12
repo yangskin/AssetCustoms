@@ -1,6 +1,6 @@
 # 路线图 / 里程碑（V1.1）
 
-版本: V1.1（Config v1.1）  |  状态: 需求已确认  |  负责人: （您的名字/TA团队）  |  最后更新: 2025-11-01
+版本: V1.1（Config v1.1）  |  状态: 需求已确认  |  负责人: （您的名字/TA团队）  |  最后更新: 2025-11-11
 
 本文件用于跟踪项目阶段性目标与关键里程碑，确保对齐产品价值与技术落地节奏。
 
@@ -24,21 +24,24 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 
 ## M2 — V1.1 功能落地（当前阶段）
 - [ ] FR1：TA 配置系统（JSONC、Profile 扫描/加载、Schema v1.1）
-	- 进度：
+	- 进度（2025-11-11）：
 		- [x] JSONC 解析能力完成（优先 json5，回退注释剥离+尾逗号处理）。
 		- [x] `Content/Config/AssetCustoms/Prop.jsonc` 默认 Profile 提供。
-		- [x] `core.config.loader.load_config()` 输出数据类 `PluginConfig`，含默认值。
-		- [ ] Unreal 侧 Profile 扫描与选择（待接入 UI）。
+		- [x] `core.config.loader.load_config()` 输出数据类 `PluginConfig`（当前覆盖：texture_merge、allowed_modes）。
+		- [x] Unreal 侧 Profile 扫描与下拉菜单项生成（Content/Config/AssetCustoms/*.jsonc）。
+		- [ ] Schema v1.1 全量字段适配（target_path_template、conflict_policy、import_settings 等）。
 - [ ] FR2：内容浏览器下拉按钮（动态填充 Profile，带上下文的文件选择）
-	- 进度：
-		- [x] 在 Content Browser 工具栏注册入口按钮“Import FBX…”。
-		- [x] 使用 tkinter 文件对话框，仅允许选择 .fbx，支持多选；记录当前 Content Browser 路径。
-		- [ ] 下拉动态 Profile 列表（待 FR1 Unreal 侧扫描完成后串联）。
-- [ ] FR3：自动化检查链（模型数量、主材质、贴图映射 智能预填充+规则匹配）
+	- 进度（2025-11-11）：
+		- [x] 在 Content Browser 工具栏注册“AssetCustoms ▼”下拉菜单（动态 Profile 列表）。
+		- [x] 使用 tkinter 文件对话框，仅允许选择 .fbx；记录当前 Content Browser 路径。
+		- [x] 选择菜单项后构建 ImportContext（解析 Profile + 采样路径）。
+		- [ ] 自动导入到隔离区（Isolation_Path）与贴图搜索（待实现）。
+- [ ] FR3：自动化检查链（模型数量、主材质、贴图映射：智能预填充+规则匹配）
 - [ ] FR4：分诊 UI（失败时弹出：原因、预填、歧义处理、命名确认、执行按钮）
 - [ ] FR5：标准化引擎（Pillow 贴图处理/打包、重命名/移动、MIC 创建/链接、导入设置、清理）
-	- 进度：
-		- [x] 贴图图层合并核心能力（`core.textures.layer_merge.merge_layers`）实现并通过单测（numpy 快路径 + Pillow 回退）。
+	- 进度（2025-11-11）：
+		- [x] 贴图图层合并核心能力（`core.textures.layer_merge.merge_layers`），numpy 快路径 + Pillow 回退；单测通过。
+		- [ ] Unreal 像素桥接与资产写回（占位）。
 
 ## M3 — 质量与体验
 - [ ] 性能预算：典型资产“静默成功”全流程 ≤ 5s（NFR1）
@@ -85,3 +88,7 @@ M4 Unreal 集成
 - 纯 Python 核心可在无 Unreal 环境下运行与测试。
 - Unreal 中可调用适配层完成简单的图层合并管道。
 - 文档包含模块边界、API 约定与示例。
+
+## 最近测试（2025-11-11）
+- 环境：Windows / Python 3.11.8 / pytest 8.4.2
+- 结果：6 项单测全部通过（core.config 与 core.textures.layer_merge）
