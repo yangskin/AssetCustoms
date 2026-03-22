@@ -2,14 +2,9 @@
 Add support for qt in unreal without blocking the editor/tick
 """
 import unreal
-import unreal_stylesheet
 import sys
-try:
-    from PySide6 import QtWidgets, QtCore
-    print("unreal_qt setup PySide6")
-except ImportError:
-    from PySide2 import QtWidgets, QtCore
-    print("unreal_qt setup PySide2")
+from PySide6 import QtWidgets, QtCore
+print("unreal_qt setup PySide6")
 # import functools
 # import unreal_qt.dark_bar
 
@@ -22,13 +17,11 @@ def setup():
     """This part is for the initial setup. Need to run once to spawn the application."""
     print("Starting unreal_qt setup")
 
-    # enable dpi scale, run before creating QApplication
+    # In PySide6, high-DPI scaling is enabled by default;
+    # AA_EnableHighDpiScaling and AA_UseHighDpiPixmaps are removed.
     QtWidgets.QApplication.setHighDpiScaleFactorRoundingPolicy(QtCore.Qt.HighDpiScaleFactorRoundingPolicy.PassThrough)
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
-    QtWidgets.QApplication.setAttribute(QtCore.Qt.AA_UseHighDpiPixmaps)
 
     unreal_app = QtWidgets.QApplication.instance() or QtWidgets.QApplication(sys.argv)
-    unreal_stylesheet.setup()
 
     print("Completed unreal_qt setup")
 
@@ -88,16 +81,13 @@ class widget_manager():
     def add_widget(cls, widget: QtWidgets.QWidget):
         if widget in cls.widgets:
             return
-        
-        # connect a callback to the close event of the widget
-        widget.close.connect(lambda: cls.remove_window(widget))
-
         cls.widgets.append(widget)
 
     @classmethod
     def remove_widget(cls, widget):
-        print("remove_window")
-        cls.widgets.remove(widget)
+        print("remove_widget")
+        if widget in cls.widgets:
+            cls.widgets.remove(widget)
 
 
 def wrap(widget):

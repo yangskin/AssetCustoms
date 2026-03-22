@@ -47,7 +47,13 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 	- [x] 贴图匹配引擎 `core/textures/matcher.py`（glob/regex + priority）
 	- [x] 检查链 `core/pipeline/check_chain.py`（资产数量 + 材质 + 映射完整性）
 	- [x] 支持 allow_missing + constant 兜底
-- [ ] FR4：分诊 UI ❌ 未实现（需 UE 原生 UI：Slate/UMG）
+- [ ] FR4：分诊 UI ❌ 未实现（**PySide6 + unreal_qt 已就绪**，可用于构建分诊窗口）
+	- 进度（2026-03-22）：
+		- [x] PySide6-Essentials 6.10.2 + shiboken6 6.10.2 离线 wheel 已入 vendor/
+		- [x] deploy.ps1 支持 PySide6 安装/清理/验证
+		- [x] `unreal_qt` 模块适配 PySide6（移除 PySide2 兼容）
+		- [x] QMessageBox 集成测试通过（`Tests/test_qt_messagebox.py`）
+		- [ ] 分诊 UI 窗口实现（显示失败原因、贴图映射、下拉选择、执行按钮）
 - [x] FR5：标准化执行引擎 ✅
 	- [x] 5.1 贴图处理（Pillow 通道编排 + flip_green + resize + 保存）
 	- [x] 5.2 资产重命名/移动

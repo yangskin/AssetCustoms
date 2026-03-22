@@ -97,7 +97,11 @@ try {
 # Clean (optional)
 # ============================================================
 # Track managed package directories for clean operation
-$managedPackages = @("PIL", "pillow-*.dist-info")
+$managedPackages = @(
+    "PIL", "pillow-*.dist-info",
+    "PySide6", "PySide6_Essentials*.dist-info",
+    "shiboken6", "shiboken6*.dist-info"
+)
 
 if ($Clean) {
     Write-Host ""
@@ -199,13 +203,20 @@ Write-Host "Verifying installation..." -ForegroundColor Cyan
 $verifyCode = @"
 import sys
 sys.path.insert(0, r'$($targetDir -replace "\\", "\\")')
+ok = True
 try:
     from PIL import Image
     print(f'Pillow OK: version={Image.__version__}')
-    sys.exit(0)
 except ImportError as e:
     print(f'Pillow FAILED: {e}')
-    sys.exit(1)
+    ok = False
+try:
+    from PySide6 import QtCore, QtWidgets
+    print(f'PySide6 OK: version={QtCore.qVersion()}')
+except ImportError as e:
+    print(f'PySide6 FAILED: {e}')
+    ok = False
+sys.exit(0 if ok else 1)
 "@
 
 $verifyResult = & $PythonExe -c $verifyCode 2>&1
@@ -229,4 +240,5 @@ Write-Host ""
 Write-Host "  Next steps:" -ForegroundColor Cyan
 Write-Host "    1. Restart Unreal Editor to load new packages"
 Write-Host "    2. In UE Python console: from PIL import Image"
+Write-Host "    3. In UE Python console: from PySide6 import QtWidgets"
 Write-Host ""

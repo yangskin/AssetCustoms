@@ -29,6 +29,10 @@ __pycache__/
 # Packages are deployed directly into Content/Python/
 Content/Python/PIL/
 Content/Python/pillow*.dist-info/
+Content/Python/PySide6/
+Content/Python/PySide6_Essentials*.dist-info/
+Content/Python/shiboken6/
+Content/Python/shiboken6*.dist-info/
 
 # Misc
 *.tmp

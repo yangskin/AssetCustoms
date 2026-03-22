@@ -4,12 +4,12 @@
 
 > 实现状态（2026-03-22）
 > - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
-> - 未实现：FR4 分诊 UI（需 Slate/UMG）。
-> - 进行中：Config Schema v1.1 剩余字段；M3 质量与体验。
+> - 进行中：FR4 分诊 UI（PySide6 + unreal_qt 基础设施已就绪，待实现业务窗口）；Config Schema v1.1 剩余字段；M3 质量与体验。
+> - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
 
 ## 作用域与边界
 - 边界：仅覆盖 UE Python 脚本与其交互的最小外部接口（Editor、AssetTools、EUL、材质系统、文件对话框）。
-- 非目标：不直接修改 UE C++ 核心；不引入重量级依赖（Pillow、json5 属于轻依赖并随插件内置）。
+- 非目标：不直接修改 UE C++ 核心；不引入重量级依赖（Pillow、json5、PySide6-Essentials 属于轻依赖并随插件内置）。
 
 ## 顶层视图（模块概览）
 - 入口：`init_unreal.py`
@@ -66,7 +66,18 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   ├─ AssetCustoms.uplugin          # Unreal 插件描述文件
   ├─ Content/
   │   └─ Python/
-  │       └─ init_unreal.py        # UE Python 入口脚本
+  │       ├─ init_unreal.py        # UE Python 入口脚本
+  │       ├─ core/                 # 纯 Python 核心（无 Unreal 依赖）
+  │       ├─ unreal_integration/   # Unreal API 桥接层
+  │       └─ unreal_qt/            # PySide6 Qt 集成层（详见下方）
+  │           ├─ __init__.py       # QApplication 管理 / tick 挂载 / widget 生命周期
+  │           └─ dark_bar.py       # 无边框暗色标题栏（DarkBar / FramelessWindow）
+  ├─ vendor/                       # 离线 wheel 包（不提交安装产物，仅 .whl）
+  │   ├─ pillow-*.whl
+  │   ├─ pyside6_essentials-*.whl
+  │   └─ shiboken6-*.whl
+  ├─ deploy.ps1                    # 依赖安装脚本（离线优先 → PyPI 回退）
+  ├─ requirements.txt              # 运行时依赖声明
   ├─ docs/                         # 项目文档
   │   ├─ architecture.md
   │   ├─ requirements_v1.1.md
@@ -77,6 +88,8 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   │   ├─ coding-style.md
   │   ├─ review-checklist.md
   │   └─ commit-convention.md
+  ├─ Tests/                        # 测试脚本
+  │   └─ test_qt_messagebox.py     # PySide6 集成验证
   ├─ README.md                     # 文档索引与导航（根级）
   ├─ CONTRIBUTING.md               # 贡献指南（根级）
   └─ SECURITY.md                   # 安全策略（根级）
@@ -107,6 +120,95 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 - 性能预算：典型资产从导入到清理 ≤ 5s（NFR1）。
 - I/O 最小化：尽量内存中合成贴图，批量保存；避免不必要的磁盘往返。
 - 可扩展性：Profile Schema 向后兼容；规则扩展不破坏现有配置。
+
+## PySide6 / unreal_qt 集成（2026-03-22）
+
+### 概述
+
+为 FR4 分诊 UI 及后续自定义编辑器窗口需求，集成 PySide6 作为 Qt 前端层。通过 `unreal_qt` 模块实现 Qt 事件循环与 UE Editor 主循环的非阻塞共存。
+
+### 依赖与安装
+
+| 包名 | 版本 | 用途 | wheel 文件 |
+|------|------|------|------------|
+| PySide6-Essentials | ≥ 6.5.0 (当前 6.10.2) | QtCore / QtGui / QtWidgets 等核心模块 | `vendor/pyside6_essentials-*.whl` |
+| shiboken6 | ≥ 6.5.0 (当前 6.10.2) | PySide6 的 C++ 绑定运行时 | `vendor/shiboken6-*.whl` |
+
+- **不安装 PySide6-Addons**（~165 MB，含 Qt3D/QtCharts 等，当前无需）。
+- 安装方式：`deploy.ps1` 离线优先（从 `vendor/` 安装 `.whl`），回退 PyPI 在线安装。
+- 安装目标：`Content/Python/`（UE 自动加入 `sys.path`）。
+
+### unreal_qt 模块架构
+
+```
+unreal_qt/
+├── __init__.py     # QApplication 初始化 + tick 挂载 + widget 管理
+└── dark_bar.py     # 自定义无边框窗口 + Unreal 风格暗色标题栏
+```
+
+#### `__init__.py` — 核心机制
+
+| 函数/类 | 职责 |
+|---------|------|
+| `setup()` | 创建/复用 `QApplication` 实例，设置 HighDPI 策略 |
+| `widget_manager` | 持有 widget 引用防止 GC，管理生命周期 |
+| `wrap(widget)` | 将 widget 加入 `widget_manager` |
+| `parent_orphan_widgets()` | 查找未挂载的顶层 Qt 窗口，通过 `unreal.parent_external_window_to_slate()` 挂载到 UE 主窗口 |
+| `tick(delta)` | 注册到 `unreal.register_slate_post_tick_callback`，每 0.3s 检查并挂载孤儿窗口 |
+
+**关键设计**：Qt 不运行独立事件循环（不调用 `app.exec()`），而是依赖 UE 的 Slate tick 回调驱动 Qt 事件处理，避免阻塞编辑器。
+
+#### `dark_bar.py` — UI 组件
+
+| 类 | 职责 |
+|----|------|
+| `DarkBar` | 自定义暗色标题栏（最小化/最大化/关闭按钮），支持拖拽移动 |
+| `DarkBarUnreal` | 继承 `DarkBar`，使用 UE 引擎 Slate SVG 图标替换文字按钮 |
+| `FramelessWindow` | 无边框窗口容器，内含 `DarkBar` + `content_layout` |
+| `FramelessWindowUnreal` | 使用 `DarkBarUnreal` 的 UE 风格无边框窗口 |
+| `wrap_widget_unreal()` | 辅助函数：将任意 QWidget 包装为 `FramelessWindowUnreal` |
+
+### PySide6 在 UE 中的注意事项
+
+| 事项 | 说明 |
+|------|------|
+| **模块缓存** | UE 缓存已导入的 Python 模块，修改 `.py` 后需 `importlib.reload()` 或重启 Editor |
+| **QWidget.close** | 是方法（slot），不是信号，不可 `.connect()` |
+| **HighDPI** | PySide6 默认启用 HighDPI，已移除的 `AA_EnableHighDpiScaling` / `AA_UseHighDpiPixmaps` 不可使用 |
+| **import unreal** | 远程执行脚本中需显式 `import unreal`，不会自动注入 |
+| **unreal_stylesheet** | 当前未安装，已从 `__init__.py` 移除引用；如需暗色样式可后续集成 |
+
+### 创建 UI 的快速模板
+
+```python
+import unreal
+import unreal_qt
+from PySide6 import QtWidgets
+
+unreal_qt.setup()
+
+# 方式 1：简单对话框
+msg = QtWidgets.QMessageBox()
+msg.setWindowTitle("标题")
+msg.setText("内容")
+msg.setStandardButtons(QtWidgets.QMessageBox.StandardButton.Ok)
+msg.show()
+unreal_qt.wrap(msg)
+
+# 方式 2：自定义窗口（Unreal 风格无边框）
+from unreal_qt.dark_bar import FramelessWindowUnreal
+
+window = FramelessWindowUnreal(title="My Tool")
+label = QtWidgets.QLabel("Hello from PySide6!")
+window.setCentralWidget(label)
+window.resize(400, 300)
+window.show()
+unreal_qt.wrap(window)
+```
+
+### 验证状态
+- ✅ `deploy.ps1` 离线安装通过（Pillow 12.1.1 + PySide6 6.10.2）
+- ✅ `Tests/test_qt_messagebox.py` 在 UE Editor 中成功弹出 QMessageBox
 
 ## 参考
 - 路线图：[docs/roadmap.md](./roadmap.md)

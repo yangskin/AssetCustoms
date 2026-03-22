@@ -1,13 +1,13 @@
-from PySide2 import QtCore
-import PySide2.QtGui as QtGui
-from PySide2.QtCore import QPoint
-from PySide2.QtCore import Qt
-from PySide2.QtWidgets import QApplication
-from PySide2.QtWidgets import QHBoxLayout
-from PySide2.QtWidgets import QLabel
-from PySide2.QtWidgets import QPushButton
-from PySide2.QtWidgets import QVBoxLayout
-from PySide2.QtWidgets import QWidget
+from PySide6 import QtCore
+import PySide6.QtGui as QtGui
+from PySide6.QtCore import QPoint
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QHBoxLayout
+from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QWidget
 from pathlib import Path
 
 

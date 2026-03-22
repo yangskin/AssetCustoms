@@ -30,6 +30,12 @@
 ## 开发提示（初稿）
 - 在 UE Editor 中加载插件时会调用 `init_unreal.py`；确保日志可见性良好。
 - 变更公共行为时请更新文档，并考虑补充 ADR。
-- V1.1 依赖：插件需内置 Pillow（PIL）与 JSONC 解析能力（json5 或注释剥离器）。
+- V1.1 依赖：插件需内置 Pillow（PIL）、JSONC 解析能力（json5 或注释剥离器）、PySide6-Essentials + shiboken6（Qt UI）。
+
+## PySide6 / Qt UI 集成
+- **依赖**：PySide6-Essentials ≥ 6.5.0、shiboken6 ≥ 6.5.0（离线 wheel 在 `vendor/` 下）。
+- **安装**：运行 `deploy.ps1` 即可自动安装所有依赖到 `Content/Python/`。
+- **UI 模块**：`Content/Python/unreal_qt/` 提供 QApplication 管理、Slate 挂载、无边框窗口等能力。
+- **架构详情**：见 [`docs/architecture.md`](docs/architecture.md)「PySide6 / unreal_qt 集成」章节。
 
 如需贡献或提问，请先阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
