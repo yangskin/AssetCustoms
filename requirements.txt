@@ -1,0 +1,4 @@
+# AssetCustoms runtime dependencies (UE Editor Python)
+# Target: Content/Python/ (UE auto-adds this to sys.path)
+# Run deploy.ps1 to install
+Pillow>=10.0.0

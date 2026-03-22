@@ -42,12 +42,12 @@
     ],
     // 逻辑位 → 匹配模式（按 priority 取最优命中；多命中时进入分诊/或按优先级取一个）
     "rules": {
-      "BaseColor":        { "priority": 10, "patterns": ["*_bc*", "*_diffuse*", "*_d*", "*_albedo*"] },
-      "Normal":           { "priority": 10, "patterns": ["*_n*", "*_normal*", "*_nrm*"] },
-      "Roughness":        { "priority": 9,  "patterns": ["*_r*", "*_rough*", "*_roughness*"] },
-      "Metallic":         { "priority": 9,  "patterns": ["*_m*", "*_metal*", "*_metallic*"] },
-      "AmbientOcclusion": { "priority": 8,  "patterns": ["*_ao*", "*_ambientocclusion*"] },
-      "Height":           { "priority": 7,  "patterns": ["*_h*", "*_height*", "*_displacement*"] }
+      "BaseColor":        { "priority": 10, "patterns": ["*_BC.*", "*_BC_*", "*_BaseColor.*", "*_BaseColor_*", "*_Diffuse.*", "*_Diffuse_*", "*_Albedo.*", "*_Albedo_*", "*_rgb_*", "*_rgb.*", "*_color_*", "*_color.*"] },
+      "Normal":           { "priority": 10, "patterns": ["*_N.*", "*_N_*", "*_Normal.*", "*_Normal_*", "*_Nrm.*", "*_Nrm_*"] },
+      "Roughness":        { "priority": 9,  "patterns": ["*_R.*", "*_R_*", "*_Rough.*", "*_Rough_*", "*_Roughness.*", "*_Roughness_*"] },
+      "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
+      "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
+      "Height":           { "priority": 7,  "patterns": ["*_H.*", "*_H_*", "*_Height.*", "*_Height_*", "*_Displacement.*", "*_Displacement_*"] }
     }
   },
 
@@ -96,10 +96,11 @@
       "material_parameter": "Normal_Texture",
       "normal_space": "OpenGL",
       "flip_green": true,
+      "allow_missing": true,
       "channels": {
-        "R": { "from": "Normal", "ch": "R" },
-        "G": { "from": "Normal", "ch": "G" },
-        "B": { "from": "Normal", "ch": "B" },
+        "R": { "from": "Normal", "ch": "R", "constant": 0.5 },
+        "G": { "from": "Normal", "ch": "G", "constant": 0.5 },
+        "B": { "from": "Normal", "ch": "B", "constant": 1.0 },
         "A": { "constant": 1.0 }
       },
       "import_settings": {
@@ -151,6 +152,7 @@
       "bit_depth": 16,
       "mips": true,
       "material_parameter": "Height_Texture",
+      "allow_missing": true,
       "channels": {
         "R": { "from": "Height", "ch": "R", "remap": [0.0, 1.0, 0.0, 1.0], "constant": 0.0 },
         "G": { "from": "Height", "ch": "R", "constant": 0.0 },

@@ -30,18 +30,36 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 		- [x] `core.config.loader.load_config()` 输出数据类 `PluginConfig`（当前覆盖：texture_merge、allowed_modes）。
 		- [x] Unreal 侧 Profile 扫描与下拉菜单项生成（Content/Config/AssetCustoms/*.jsonc）。
 		- [ ] Schema v1.1 全量字段适配（target_path_template、conflict_policy、import_settings 等）。
-- [ ] FR2：内容浏览器下拉按钮（动态填充 Profile，带上下文的文件选择）
-	- 进度（2025-11-11）：
-		- [x] 在 Content Browser 工具栏注册“AssetCustoms ▼”下拉菜单（动态 Profile 列表）。
-		- [x] 使用 tkinter 文件对话框，仅允许选择 .fbx；记录当前 Content Browser 路径。
-		- [x] 选择菜单项后构建 ImportContext（解析 Profile + 采样路径）。
-		- [ ] 自动导入到隔离区（Isolation_Path）与贴图搜索（待实现）。
-- [ ] FR3：自动化检查链（模型数量、主材质、贴图映射：智能预填充+规则匹配）
-- [ ] FR4：分诊 UI（失败时弹出：原因、预填、歧义处理、命名确认、执行按钮）
-- [ ] FR5：标准化引擎（Pillow 贴图处理/打包、重命名/移动、MIC 创建/链接、导入设置、清理）
-	- 进度（2025-11-11）：
-		- [x] 贴图图层合并核心能力（`core.textures.layer_merge.merge_layers`），numpy 快路径 + Pillow 回退；单测通过。
-		- [ ] Unreal 像素桥接与资产写回（占位）。
+- [x] FR2：智能导入核心流程 ✅
+	- [x] Content Browser 工具栏下拉（动态 Profile 列表）
+	- [x] tkinter 文件对话框（仅 .fbx）+ Content Browser 路径采样
+	- [x] ImportContext 构建（解析 Profile + 采样路径）
+	- [x] 隔离区路径计算 `core/naming.py`
+	- [x] 导入管道编排 `unreal_integration/import_pipeline.py`
+- [x] FR2.5：原生嵌入贴图管线 ✅（新增 2026-03-22）
+	- [x] 三层匹配策略：名称 pattern → sRGB 启发式 → 单贴图兜底 BaseColor
+	- [x] 跳过 Pillow，直接操作 UE 资产（重命名 + 导入设置）
+	- [x] 内部贴图优先：Phase 3.5 无条件覆盖，FBX 嵌入贴图始终优先于外部匹配
+	- [x] 自动材质绑定读取：`read_material_texture_bindings()` 从 FBX 自动材质（MIC）读取 `texture_parameter_values`
+	- [x] `FBX_PARAM_TO_SLOT` 映射表（DiffuseColorMap→BaseColor 等 8 项）
+	- [x] `_is_direct_passthrough()` 嵌入贴图直通路径
+- [x] FR3：自动化检查链 ✅
+	- [x] 贴图匹配引擎 `core/textures/matcher.py`（glob/regex + priority）
+	- [x] 检查链 `core/pipeline/check_chain.py`（资产数量 + 材质 + 映射完整性）
+	- [x] 支持 allow_missing + constant 兜底
+- [ ] FR4：分诊 UI ❌ 未实现（需 UE 原生 UI：Slate/UMG）
+- [x] FR5：标准化执行引擎 ✅
+	- [x] 5.1 贴图处理（Pillow 通道编排 + flip_green + resize + 保存）
+	- [x] 5.2 资产重命名/移动
+	- [x] 5.3 MIC 创建/链接
+	- [x] 5.4 SM→MI 绑定：`mesh.set_material(slot, mi)`（2026-03-22 修复 `set_editor_property` 值类型写回失效问题）
+	- [x] 5.5 隔离区清理
+	- [x] 5.6 导入设置应用
+	- [x] 5.7 MM_Prop_PBR 母材质（2026-03-22 通过 MCP 创建）：
+		- `BaseColor_Texture`(Color) → BaseColor
+		- `Normal_Texture`(Normal) → Normal
+		- `Packed_Texture`(LinearColor) → Metallic(R) / Roughness(G) / AO(B)
+		- `Height_Texture`(LinearColor) → 预留
 
 ## M3 — 质量与体验
 - [ ] 性能预算：典型资产“静默成功”全流程 ≤ 5s（NFR1）
@@ -88,6 +106,13 @@ M4 Unreal 集成
 - 纯 Python 核心可在无 Unreal 环境下运行与测试。
 - Unreal 中可调用适配层完成简单的图层合并管道。
 - 文档包含模块边界、API 约定与示例。
+
+## E2E 验证（2026-03-22）
+- 外部贴图 E2E：✅ 通过
+- 原生嵌入贴图 E2E：✅ 通过（FR2.5 管线）
+- 外部贴图回归：✅ 通过
+- SM→MI 绑定验证：✅ slot[0] = MI, parent = MM_Prop_PBR, 贴图参数全部绑定
+- 总计：82 unit tests + 3 E2E tests
 
 ## 最近测试（2025-11-11）
 - 环境：Windows / Python 3.11.8 / pytest 8.4.2

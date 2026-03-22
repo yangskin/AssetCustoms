@@ -2,9 +2,10 @@
 
 本项目位于 Unreal Engine 插件的 Python 侧，主要用于资源处理与工具自动化，围绕“静默成功，响亮失败”的 UX 模型构建。
 
-> 实现状态（2025-11-11）
-> - 已完成：ToolMenus 工具栏下拉（动态扫描 Content/Config/AssetCustoms/*.jsonc）；tkinter 文件对话框（仅 .fbx）；ImportContext 构建；核心贴图图层合并库（含单测）。
-> - 进行中：Config Schema v1.1 全量字段覆盖；隔离区导入、检查链、分诊 UI、标准化执行引擎与 Unreal 像素桥接。
+> 实现状态（2026-03-22）
+> - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
+> - 未实现：FR4 分诊 UI（需 Slate/UMG）。
+> - 进行中：Config Schema v1.1 剩余字段；M3 质量与体验。
 
 ## 作用域与边界
 - 边界：仅覆盖 UE Python 脚本与其交互的最小外部接口（Editor、AssetTools、EUL、材质系统、文件对话框）。
@@ -36,10 +37,28 @@
 1) UE 加载插件 -> `init_unreal.py` 注册 UI 与加载 Profile 列表。
 2) 用户选择“AssetCustoms: 智能导入 ▼”中的某 Profile -> 打开 .fbx 文件对话框。
 3) 计算隔离区路径，导入 FBX 与纹理（按 search_roots）。
-4) 触发检查链：模型数量 -> 主材质 -> 贴图映射（智能预填充 + 规则匹配）。
-5) 分支：
-   - 成功：进入标准化引擎（贴图处理、重命名/移动、MIC 创建/链接、导入设置、清理）-> 通知成功。
+4) 检测贴图来源：
+   - 路径 A（外部贴图）：磁盘上有匹配的贴图文件 → 触发检查链（FR3）→ 标准化引擎（FR5）。
+   - 路径 B（嵌入贴图）：磁盘无贴图但 UE 隔离区有 Texture2D → 原生嵌入管线（FR2.5）。
+5) 路径 A 分支：
+   - 成功：进入标准化引擎（Pillow 贴图处理、重命名/移动、MIC 创建/链接、导入设置、清理）-> 通知成功。
    - 失败：保留隔离区并弹出分诊 UI -> 用户补全 -> 再次执行标准化引擎。
+6) 路径 B 分支（FR2.5）：
+   - 删除自动创建的材质 → 三层策略匹配贴图到逻辑位 → 重命名贴图 → 移动 SM → 创建 MI → 链接 → 清理。
+   - 跳过 Pillow 通道编排，保留 UE 原生贴图质量。
+   - **内部贴图优先**：Phase 3.5 无条件以自动材质绑定（`texture_parameter_values`）覆盖外部匹配结果。
+   - **自动材质绑定读取**：`read_material_texture_bindings()` 从 FBX 自动创建的 MIC 读取精准贴图→逻辑槽映射；`FBX_PARAM_TO_SLOT` 将 DiffuseColorMap 等 FBX 参数名转为 BaseColor 等逻辑槽。
+
+## SM→MI 绑定与母材质（2026-03-22）
+- **SM→MI 绑定方式**：`mesh.set_material(slot, mi)`（UE 原生 API）。
+  - ⚠ `set_editor_property("static_materials", ...)` 对 `FStaticMaterial`（值类型）写回无效，不可使用。
+- **MM_Prop_PBR 母材质** (`/Game/MyProject/Materials/Masters/MM_Prop_PBR`)：
+  - 4 个 TextureSampleParameter2D：
+    - `BaseColor_Texture` (SamplerType=Color) → BaseColor 输出
+    - `Normal_Texture` (SamplerType=Normal) → Normal 输出
+    - `Packed_Texture` (SamplerType=LinearColor) → Metallic(R) / Roughness(G) / AO(B)
+    - `Height_Texture` (SamplerType=LinearColor) → 预留
+  - MI 创建时自动以此为 Parent，贴图参数按 `_texture_slot_to_mi_param` 映射绑定。
 
 ## 目录结构（当前）
 ```
