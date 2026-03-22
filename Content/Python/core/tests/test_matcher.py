@@ -98,6 +98,31 @@ class TestDiscoverTextureFiles:
         )
         assert len(files) == 1
 
+    def test_glob_search_root(self, tmp_path):
+        """search_root 含 glob 通配符时应展开匹配目录。"""
+        fbm = tmp_path / "model_abc.fbm"
+        fbm.mkdir()
+        (fbm / "tex_basecolor.png").write_bytes(b"")
+        (fbm / "tex_normal.png").write_bytes(b"")
+        # 另一个不相关目录
+        (tmp_path / "other").mkdir()
+        (tmp_path / "other" / "noise.png").write_bytes(b"")
+
+        files = discover_texture_files(
+            search_roots=[str(tmp_path) + "/*.fbm"],
+            extensions=[".png"],
+        )
+        basenames = sorted(os.path.basename(f) for f in files)
+        assert basenames == ["tex_basecolor.png", "tex_normal.png"]
+
+    def test_glob_no_match(self, tmp_path):
+        """glob 模式无匹配时返回空列表。"""
+        files = discover_texture_files(
+            search_roots=[str(tmp_path) + "/*.fbm"],
+            extensions=[".png"],
+        )
+        assert files == []
+
 
 # ---------------------------------------------------------------------------
 # 贴图匹配

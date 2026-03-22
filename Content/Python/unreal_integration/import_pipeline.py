@@ -514,7 +514,8 @@ def _run_native_embedded_pipeline(
         return result
 
     # 3. 资产数量检查（找 StaticMesh）
-    asset_names = [os.path.basename(a) for a in imported_assets]
+    # imported_object_paths 可能返回 ".ObjectName" 后缀，需清理
+    asset_names = [os.path.basename(a).split(".")[0] for a in imported_assets]
     static_mesh_name: Optional[str] = None
     for name in asset_names:
         upper = name.upper()
@@ -729,11 +730,31 @@ def run_import_pipeline(
     )
 
     # --- 阶段 3：检查链 ---
-    asset_names = [os.path.basename(a) for a in imported_assets]
+    # imported_object_paths 可能返回 ".ObjectName" 后缀（如 "Mesh.Mesh"），需清理为纯名称
+    asset_names = [os.path.basename(a).split(".")[0] for a in imported_assets]
+
+    # 构建排除集合：已识别的贴图和材质名称
+    # 用于排除法识别 StaticMesh（应对非标准命名的 FBX，如 Tripo 导出）
+    _excluded_basenames: set = set()
+    for _p in ue_textures:
+        _clean = _p.split(".")[0] if "." in _p else _p
+        _excluded_basenames.add(_clean.split("/")[-1])
+    for _p in auto_materials:
+        _clean = _p.split(".")[0] if "." in _p else _p
+        _excluded_basenames.add(_clean.split("/")[-1])
+
+    def _mesh_filter(name: str) -> bool:
+        upper = name.upper()
+        if upper.startswith("SM_") or "STATICMESH" in upper:
+            return True
+        # 排除法：非贴图、非材质的资产视为 StaticMesh
+        return name not in _excluded_basenames
+
     check_result = run_check_chain(
         asset_names=asset_names,
         texture_files=all_texture_paths,
         config=config,
+        mesh_filter=_mesh_filter,
         material_exists_fn=ops.asset_exists,
     )
     result.check_result = check_result
@@ -819,99 +840,99 @@ def run_import_pipeline(
                     pillow_mapping[slot] = matched_path
 
             # 5.3 Pillow 处理（跳过已直接处理的输出）
-        if direct_suffixes:
-            pillow_config = copy.deepcopy(config)
-            for od in pillow_config.texture_output_definitions:
-                if od.suffix in direct_suffixes:
-                    od.enabled = False
-        else:
-            pillow_config = config
-
-        std_result = process_textures(
-            pillow_config, pillow_mapping, tmp_dir, base_name, category,
-        )
-
-        if not std_result.success:
-            result.errors.extend(std_result.errors)
-            return result
-
-        # 5.4 解析目标路径（冲突策略）
-        target_path = names.target_path
-        final_target = resolve_conflict(
-            target_path, config.conflict_policy, ops.asset_exists,
-        )
-        if final_target is None:
-            result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
-            return result
-
-        # 移动 StaticMesh
-        if check_result.static_mesh:
-            sm_src = f"{isolation_path}/{check_result.static_mesh}"
-            sm_dst = f"{final_target}/{names.static_mesh}"
-            ops.rename_asset(sm_src, sm_dst)
-
-        # 5.5 处理直接嵌入贴图（重命名 + 移动 + 应用导入设置）
-        all_processed: List[ProcessedTexture] = []
-        for suffix, (output_def, ue_tex_path) in direct_suffixes.items():
-            tex_name = names.texture_names.get(suffix)
-            if not tex_name:
-                continue
-            new_path = f"{final_target}/{tex_name}"
-            ops.rename_asset(ue_tex_path, new_path)
-            imp = output_def.import_settings
-            settings = {
-                "compression": imp.compression,
-                "lod_group": imp.lod_group,
-                "srgb": output_def.srgb,
-                "virtual_texture": imp.virtual_texture,
-            }
-            ops.apply_texture_import_settings(new_path, settings)
-            all_processed.append(ProcessedTexture(
-                output_name=output_def.output_name,
-                suffix=suffix,
-                file_path=new_path,
-                material_parameter=output_def.material_parameter,
-                import_settings=settings,
-                srgb=output_def.srgb,
-            ))
-            logger.info("Direct embedded texture: %s → %s", ue_tex_path, new_path)
-
-        # 5.6 导入 Pillow 标准化贴图为 UE 资产
-        for proc_tex in std_result.textures:
-            imported_path = ops.import_texture_file(proc_tex.file_path, final_target)
-            if imported_path:
-                logger.info("Imported texture: %s → %s", proc_tex.file_path, imported_path)
+            if direct_suffixes:
+                pillow_config = copy.deepcopy(config)
+                for od in pillow_config.texture_output_definitions:
+                    if od.suffix in direct_suffixes:
+                        od.enabled = False
             else:
-                logger.warning("Failed to import texture: %s", proc_tex.file_path)
+                pillow_config = config
 
-        all_processed.extend(std_result.textures)
-        result.standardize_result = StandardizeResult(textures=all_processed)
+            std_result = process_textures(
+                pillow_config, pillow_mapping, tmp_dir, base_name, category,
+            )
 
-        # 5.7 MIC 创建
-        mi = None
-        if config.default_master_material_path:
-            mi_path = f"{final_target}/{names.material_instance}"
-            mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+            if not std_result.success:
+                result.errors.extend(std_result.errors)
+                return result
 
-            for proc_tex in all_processed:
-                tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
-                tex_ue_path = f"{final_target}/{tex_ue_name}"
-                if mi and proc_tex.material_parameter:
-                    ops.set_material_texture_param(mi, proc_tex.material_parameter, tex_ue_path)
-                # Pillow 输出需应用导入设置；直接输出已在 5.5 中应用
-                if proc_tex.suffix not in direct_suffixes:
-                    ops.apply_texture_import_settings(tex_ue_path, proc_tex.import_settings)
+            # 5.4 解析目标路径（冲突策略）
+            target_path = names.target_path
+            final_target = resolve_conflict(
+                target_path, config.conflict_policy, ops.asset_exists,
+            )
+            if final_target is None:
+                result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
+                return result
 
-        # 5.8 绑定 SM → MI
-        if mi and check_result.static_mesh:
-            sm_dst = f"{final_target}/{names.static_mesh}"
-            mi_path = f"{final_target}/{names.material_instance}"
-            ops.set_static_mesh_material(sm_dst, mi_path)
+            # 移动 StaticMesh
+            if check_result.static_mesh:
+                sm_src = f"{isolation_path}/{check_result.static_mesh}"
+                sm_dst = f"{final_target}/{names.static_mesh}"
+                ops.rename_asset(sm_src, sm_dst)
 
-        # 5.9 清理隔离区
-        ops.delete_directory(isolation_path)
+            # 5.5 处理直接嵌入贴图（重命名 + 移动 + 应用导入设置）
+            all_processed: List[ProcessedTexture] = []
+            for suffix, (output_def, ue_tex_path) in direct_suffixes.items():
+                tex_name = names.texture_names.get(suffix)
+                if not tex_name:
+                    continue
+                new_path = f"{final_target}/{tex_name}"
+                ops.rename_asset(ue_tex_path, new_path)
+                imp = output_def.import_settings
+                settings = {
+                    "compression": imp.compression,
+                    "lod_group": imp.lod_group,
+                    "srgb": output_def.srgb,
+                    "virtual_texture": imp.virtual_texture,
+                }
+                ops.apply_texture_import_settings(new_path, settings)
+                all_processed.append(ProcessedTexture(
+                    output_name=output_def.output_name,
+                    suffix=suffix,
+                    file_path=new_path,
+                    material_parameter=output_def.material_parameter,
+                    import_settings=settings,
+                    srgb=output_def.srgb,
+                ))
+                logger.info("Direct embedded texture: %s → %s", ue_tex_path, new_path)
 
-        result.phase = "done"
+            # 5.6 导入 Pillow 标准化贴图为 UE 资产
+            for proc_tex in std_result.textures:
+                imported_path = ops.import_texture_file(proc_tex.file_path, final_target)
+                if imported_path:
+                    logger.info("Imported texture: %s → %s", proc_tex.file_path, imported_path)
+                else:
+                    logger.warning("Failed to import texture: %s", proc_tex.file_path)
+
+            all_processed.extend(std_result.textures)
+            result.standardize_result = StandardizeResult(textures=all_processed)
+
+            # 5.7 MIC 创建
+            mi = None
+            if config.default_master_material_path:
+                mi_path = f"{final_target}/{names.material_instance}"
+                mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+
+                for proc_tex in all_processed:
+                    tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
+                    tex_ue_path = f"{final_target}/{tex_ue_name}"
+                    if mi and proc_tex.material_parameter:
+                        ops.set_material_texture_param(mi, proc_tex.material_parameter, tex_ue_path)
+                    # Pillow 输出需应用导入设置；直接输出已在 5.5 中应用
+                    if proc_tex.suffix not in direct_suffixes:
+                        ops.apply_texture_import_settings(tex_ue_path, proc_tex.import_settings)
+
+            # 5.8 绑定 SM → MI
+            if mi and check_result.static_mesh:
+                sm_dst = f"{final_target}/{names.static_mesh}"
+                mi_path = f"{final_target}/{names.material_instance}"
+                ops.set_static_mesh_material(sm_dst, mi_path)
+
+            # 5.9 清理隔离区
+            ops.delete_directory(isolation_path)
+
+            result.phase = "done"
     except Exception as e:
         logger.error(
             "Import pipeline failed at standardize phase: %s "

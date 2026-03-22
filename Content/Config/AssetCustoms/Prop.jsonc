@@ -38,7 +38,8 @@
     "search_roots": [
       "{DropDir}",
       "{DropDir}/Textures",
-      "{DropDir}/Maps"
+      "{DropDir}/Maps",
+      "{DropDir}/*.fbm"
     ],
     // 逻辑位 → 匹配模式（按 priority 取最优命中；多命中时进入分诊/或按优先级取一个）
     "rules": {

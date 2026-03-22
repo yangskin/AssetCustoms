@@ -129,6 +129,59 @@ def compute_isolation_path(
     return f"{current_path}/_temp_{base_name}"
 
 
+# 常见 UE 资产前缀（提取 base_name 时剥离）
+_KNOWN_PREFIXES = ("SM_", "SK_", "T_", "MI_", "M_")
+
+# 最大可读 base_name 长度
+_MAX_READABLE_LENGTH = 40
+
+# 不可读名称的截断长度
+_GARBLED_TRUNCATE_LENGTH = 12
+
+# UUID 片段模式：连续 8+ 位十六进制字符（可能被短横线分隔）
+_UUID_PATTERN = re.compile(r"[0-9a-f]{8,}", re.IGNORECASE)
+
+
+def _is_readable_name(name: str) -> bool:
+    """判断名称是否"可读"（非乱码/UUID/随机字符串）。
+
+    规则：
+    1. 过长（> _MAX_READABLE_LENGTH）→ 不可读
+    2. 包含 UUID 片段（连续 8+ 位 hex）→ 不可读
+    3. 其他 → 可读
+    """
+    if len(name) > _MAX_READABLE_LENGTH:
+        return False
+    if _UUID_PATTERN.search(name):
+        return False
+    return True
+
+
+def _strip_known_prefix(name: str) -> str:
+    """去除已知 UE 资产前缀（SM_、SK_ 等），仅处理一次。"""
+    for prefix in _KNOWN_PREFIXES:
+        if name.startswith(prefix):
+            return name[len(prefix):]
+    return name
+
+
 def extract_base_name(fbx_path: str) -> str:
-    """从 FBX 文件路径提取基础名（不含扩展名）。"""
-    return os.path.splitext(os.path.basename(fbx_path))[0]
+    """从 FBX 文件路径提取基础名。
+
+    策略（以模型文件名为唯一来源）：
+    1. 去扩展名
+    2. 去已知 UE 前缀（SM_、SK_ 等）
+    3. 若名称可读 → 直接使用
+    4. 若名称不可读（含 UUID / 过长 / 乱码）→ 截取前 12 字符（不足 12 有几个用几个）
+    """
+    raw = os.path.splitext(os.path.basename(fbx_path))[0]
+    stripped = _strip_known_prefix(raw)
+
+    if _is_readable_name(stripped):
+        return stripped
+
+    # 不可读：从原始名 (去扩展名后) 截取前 N 字符
+    truncated = raw[:_GARBLED_TRUNCATE_LENGTH]
+    # 去除末尾的下划线/短横线避免丑陋
+    truncated = truncated.rstrip("_-")
+    return truncated or raw[:1]

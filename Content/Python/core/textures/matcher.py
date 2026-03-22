@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import fnmatch
+import glob
 import os
 import re
 from dataclasses import dataclass, field
@@ -61,19 +62,25 @@ def discover_texture_files(
 
     for root_template in search_roots:
         root = root_template.replace("{DropDir}", drop_dir)
-        if not os.path.isdir(root):
-            continue
-        for entry in os.listdir(root):
-            full = os.path.join(root, entry)
-            if not os.path.isfile(full):
-                continue
-            _, ext = os.path.splitext(entry)
-            if ext.lower() not in ext_set:
-                continue
-            norm = os.path.normcase(os.path.abspath(full))
-            if norm not in seen:
-                seen.add(norm)
-                result.append(full)
+        # 支持 glob 通配符（如 {DropDir}/*.fbm）
+        if "*" in root or "?" in root:
+            matched_dirs = [d for d in glob.glob(root) if os.path.isdir(d)]
+        elif os.path.isdir(root):
+            matched_dirs = [root]
+        else:
+            matched_dirs = []
+        for root_dir in matched_dirs:
+            for entry in os.listdir(root_dir):
+                full = os.path.join(root_dir, entry)
+                if not os.path.isfile(full):
+                    continue
+                _, ext = os.path.splitext(entry)
+                if ext.lower() not in ext_set:
+                    continue
+                norm = os.path.normcase(os.path.abspath(full))
+                if norm not in seen:
+                    seen.add(norm)
+                    result.append(full)
     return result
 
 

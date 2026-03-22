@@ -9,6 +9,8 @@ from core.naming import (
     resolve_conflict,
     resolve_names,
     _expand_template,
+    _is_readable_name,
+    _strip_known_prefix,
 )
 
 
@@ -126,3 +128,61 @@ class TestExtractBaseName:
 
     def test_nested_path(self):
         assert extract_base_name("/home/user/assets/Character_Hero.FBX") == "Character_Hero"
+
+    def test_strip_sm_prefix(self):
+        assert extract_base_name("C:/Models/SM_HeroSword.fbx") == "HeroSword"
+
+    def test_strip_sk_prefix(self):
+        assert extract_base_name("C:/Models/SK_Monster.fbx") == "Monster"
+
+    def test_garbled_uuid_truncated(self):
+        """Tripo 等 AI 工具导出的 UUID 长文件名 → 截取前 12 字符。"""
+        result = extract_base_name(
+            "C:/Models/tripo_convert_07eaa50d-9af7-4391-aefb-6e4ec42ec7b1.fbx"
+        )
+        assert result == "tripo_conver"
+
+    def test_garbled_short_name(self):
+        """不足 12 字符的乱码名直接全用。"""
+        result = extract_base_name("C:/Models/ab3f9e1c.fbx")
+        assert len(result) <= 12
+
+    def test_readable_name_not_truncated(self):
+        """正常可读名称不受截断影响。"""
+        assert extract_base_name("C:/Models/BeautifulChair.fbx") == "BeautifulChair"
+
+    def test_trailing_separator_stripped(self):
+        """截断后末尾的下划线/短横线被清理。"""
+        # 假设文件名 12 字符处恰好是 '_'
+        result = extract_base_name("C:/Models/abcdef01234_rest_of_uuid_name.fbx")
+        assert not result.endswith("_")
+        assert not result.endswith("-")
+
+
+class TestIsReadableName:
+    def test_normal_name(self):
+        assert _is_readable_name("MyRock") is True
+
+    def test_uuid_name(self):
+        assert _is_readable_name("07eaa50d-9af7-4391-aefb-6e4ec42ec7b1") is False
+
+    def test_hex_block(self):
+        assert _is_readable_name("tripo_convert_07eaa50d") is False
+
+    def test_long_name(self):
+        assert _is_readable_name("A" * 41) is False
+
+    def test_short_hex_ok(self):
+        """7 位以下 hex 不触发 UUID 检测。"""
+        assert _is_readable_name("abc1234") is True
+
+
+class TestStripKnownPrefix:
+    def test_sm_prefix(self):
+        assert _strip_known_prefix("SM_Rock") == "Rock"
+
+    def test_no_prefix(self):
+        assert _strip_known_prefix("MyChair") == "MyChair"
+
+    def test_only_first_prefix(self):
+        assert _strip_known_prefix("SM_T_Weird") == "T_Weird"

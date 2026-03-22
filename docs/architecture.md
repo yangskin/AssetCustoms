@@ -104,6 +104,12 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   - 输入：Profile 选择、当前内容浏览器路径、FBX 文件路径。
   - 输出：隔离区内的导入资产（SM、Textures、FBX 材质）。
   - 错误：Current_Path 非法 -> 使用 default_fallback_import_path。
+  - **Base_Name 提取策略**（`extract_base_name`）：
+    1. 以模型文件名为唯一来源（不从其他信息推导）。
+    2. 去扩展名后，剥离已知 UE 前缀（`SM_`/`SK_`/`T_`/`MI_`/`M_`）。
+    3. 可读性检测：名称 ≤ 40 字符且不含 UUID 片段（连续 8+ 位 hex）→ 直接使用。
+    4. 不可读（AIGC UUID 乱码等）→ 截取原始文件名前 12 字符（不足 12 有几个用几个），去末尾 `_`/`-`。
+    5. 后续 SM/MI/贴图名称、目标路径均以此 Base_Name 为基础。
 - 检查链（FR3）
   - 输入：隔离区资产、Selected_Profile。
   - 输出：映射结果（逻辑槽 -> 源贴图）。
