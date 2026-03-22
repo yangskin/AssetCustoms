@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 import logging
 import copy
+import time
 import tempfile
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
@@ -31,6 +32,20 @@ from core.textures.matcher import MatchResult, discover_texture_files, match_tex
 
 logger = logging.getLogger("AssetCustoms")
 
+# NFR1: 性能预算阈值（秒）
+_PERF_BUDGET_SECONDS = 5.0
+
+
+@dataclass
+class TriageContext:
+    """保存 FR3 失败时的上下文，供 FR4 分诊后恢复 FR5 使用。"""
+    config: Optional[PluginConfig] = None
+    category: str = ""
+    current_path: str = "/Game"
+    base_name: str = ""
+    embedded_lookup: Dict[str, str] = field(default_factory=dict)
+    all_texture_paths: List[str] = field(default_factory=list)
+
 
 @dataclass
 class ImportPipelineResult:
@@ -41,6 +56,7 @@ class ImportPipelineResult:
     check_result: Optional[CheckResult] = None
     standardize_result: Optional[StandardizeResult] = None
     errors: List[str] = field(default_factory=list)
+    triage_context: Optional[TriageContext] = None
 
     @property
     def success(self) -> bool:
@@ -537,65 +553,74 @@ def _run_native_embedded_pipeline(
         result.errors.append(f"目标路径已存在且策略为 skip: {names.target_path}")
         return result
 
-    # 6. 重命名 + 移动嵌入贴图
-    processed_textures: List[ProcessedTexture] = []
-    for slot, ue_tex_path in slot_mapping.items():
-        output_def = _find_output_for_slot(config, slot)
-        if output_def is None:
-            logger.warning("No output definition for slot '%s', skipping texture", slot)
-            continue
-        new_name = names.texture_names.get(output_def.suffix)
-        if new_name is None:
-            continue
-        new_path = f"{final_target}/{new_name}"
-        ops.rename_asset(ue_tex_path, new_path)
-        logger.info("Renamed texture: %s → %s", ue_tex_path, new_path)
+    # 6-10: UE 资产操作（NFR3: try/except 保护，失败时保留隔离区）
+    try:
+        # 6. 重命名 + 移动嵌入贴图
+        processed_textures: List[ProcessedTexture] = []
+        for slot, ue_tex_path in slot_mapping.items():
+            output_def = _find_output_for_slot(config, slot)
+            if output_def is None:
+                logger.warning("No output definition for slot '%s', skipping texture", slot)
+                continue
+            new_name = names.texture_names.get(output_def.suffix)
+            if new_name is None:
+                continue
+            new_path = f"{final_target}/{new_name}"
+            ops.rename_asset(ue_tex_path, new_path)
+            logger.info("Renamed texture: %s → %s", ue_tex_path, new_path)
 
-        # 应用导入设置
-        import_settings_dict = {
-            "compression": output_def.import_settings.compression,
-            "lod_group": output_def.import_settings.lod_group,
-            "srgb": output_def.srgb,
-            "virtual_texture": output_def.import_settings.virtual_texture,
-        }
-        ops.apply_texture_import_settings(new_path, import_settings_dict)
+            # 应用导入设置
+            import_settings_dict = {
+                "compression": output_def.import_settings.compression,
+                "lod_group": output_def.import_settings.lod_group,
+                "srgb": output_def.srgb,
+                "virtual_texture": output_def.import_settings.virtual_texture,
+            }
+            ops.apply_texture_import_settings(new_path, import_settings_dict)
 
-        processed_textures.append(ProcessedTexture(
-            output_name=output_def.output_name,
-            suffix=output_def.suffix,
-            file_path=new_path,
-            material_parameter=output_def.material_parameter,
-            import_settings=import_settings_dict,
-            srgb=output_def.srgb,
-        ))
+            processed_textures.append(ProcessedTexture(
+                output_name=output_def.output_name,
+                suffix=output_def.suffix,
+                file_path=new_path,
+                material_parameter=output_def.material_parameter,
+                import_settings=import_settings_dict,
+                srgb=output_def.srgb,
+            ))
 
-    result.standardize_result = StandardizeResult(textures=processed_textures)
+        result.standardize_result = StandardizeResult(textures=processed_textures)
 
-    # 7. 移动 StaticMesh
-    sm_src = f"{isolation_path}/{static_mesh_name}"
-    sm_dst = f"{final_target}/{names.static_mesh}"
-    ops.rename_asset(sm_src, sm_dst)
-    logger.info("Moved StaticMesh: %s → %s", sm_src, sm_dst)
+        # 7. 移动 StaticMesh
+        sm_src = f"{isolation_path}/{static_mesh_name}"
+        sm_dst = f"{final_target}/{names.static_mesh}"
+        ops.rename_asset(sm_src, sm_dst)
+        logger.info("Moved StaticMesh: %s → %s", sm_src, sm_dst)
 
-    # 8. 创建 MI 并链接贴图
-    mi = None
-    if config.default_master_material_path:
-        mi_path = f"{final_target}/{names.material_instance}"
-        mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+        # 8. 创建 MI 并链接贴图
+        mi = None
+        if config.default_master_material_path:
+            mi_path = f"{final_target}/{names.material_instance}"
+            mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+            if mi:
+                for pt in processed_textures:
+                    if pt.material_parameter:
+                        ops.set_material_texture_param(mi, pt.material_parameter, pt.file_path)
+                        logger.info("Linked %s → MI param '%s'", pt.file_path, pt.material_parameter)
+
+        # 9. 绑定 SM → MI
         if mi:
-            for pt in processed_textures:
-                if pt.material_parameter:
-                    ops.set_material_texture_param(mi, pt.material_parameter, pt.file_path)
-                    logger.info("Linked %s → MI param '%s'", pt.file_path, pt.material_parameter)
+            ops.set_static_mesh_material(sm_dst, f"{final_target}/{names.material_instance}")
 
-    # 9. 绑定 SM → MI
-    if mi:
-        ops.set_static_mesh_material(sm_dst, f"{final_target}/{names.material_instance}")
+        # 10. 清理隔离区
+        ops.delete_directory(isolation_path)
 
-    # 10. 清理隔离区
-    ops.delete_directory(isolation_path)
+        result.phase = "done"
+    except Exception as e:
+        logger.error(
+            "Native embedded pipeline failed at standardize phase: %s "
+            "— isolation zone preserved: %s", e, isolation_path,
+        )
+        result.errors.append(f"原生嵌入贴图标准化异常: {e}")
 
-    result.phase = "done"
     return result
 
 
@@ -625,6 +650,7 @@ def run_import_pipeline(
     if ops is None:
         ops = UnrealAssetOps()
 
+    t_start = time.monotonic()
     result = ImportPipelineResult()
     base_name = extract_base_name(fbx_path)
 
@@ -729,55 +755,70 @@ def run_import_pipeline(
                 )
 
     if not check_result.passed:
-        # 检查失败 → 停在隔离区，等待分诊 UI
+        # 检查失败 → 停在隔离区，保存上下文供分诊 UI 恢复
+        result.triage_context = TriageContext(
+            config=config,
+            category=category,
+            current_path=current_path,
+            base_name=base_name,
+            embedded_lookup=dict(embedded_lookup),
+            all_texture_paths=list(all_texture_paths),
+        )
         return result
 
     # --- 阶段 4：解析名称 ---
     names = resolve_names(config, base_name, category, current_path)
     result.names = names
 
-    # --- 阶段 5：标准化（嵌入贴图直通 + Pillow 后处理） ---
+    # --- 阶段 5：标准化（嵌入贴图直通 + Pillow 后处理）---
+    # NFR3: try/except 保护，失败时保留隔离区 + 清晰日志
     result.phase = "standardize"
-    mapping = check_result.match_result.mapping if check_result.match_result else {}
+    try:
+        mapping = check_result.match_result.mapping if check_result.match_result else {}
 
-    # 5.1 识别可直接使用嵌入贴图的输出（passthrough：同源同通道、无变换）
-    direct_suffixes: Dict[str, tuple] = {}  # suffix → (output_def, ue_tex_path)
-    for output_def in config.texture_output_definitions:
-        if not output_def.enabled:
-            continue
-        source_slot = _is_direct_passthrough(output_def)
-        if source_slot is None or source_slot not in mapping:
-            continue
-        matched_path = mapping[source_slot]
-        if matched_path not in embedded_lookup:
-            continue
-        direct_suffixes[output_def.suffix] = (output_def, embedded_lookup[matched_path])
+        # 5.1 识别可直接使用嵌入贴图的输出（passthrough：同源同通道、无变换）
+        direct_suffixes: Dict[str, tuple] = {}  # suffix → (output_def, ue_tex_path)
+        for output_def in config.texture_output_definitions:
+            if not output_def.enabled:
+                continue
+            source_slot = _is_direct_passthrough(output_def)
+            if source_slot is None or source_slot not in mapping:
+                continue
+            matched_path = mapping[source_slot]
+            if matched_path not in embedded_lookup:
+                continue
+            direct_suffixes[output_def.suffix] = (output_def, embedded_lookup[matched_path])
 
-    if direct_suffixes:
-        logger.info(
-            "Direct embedded passthrough outputs: %s",
-            ", ".join(f"{s} ({od.output_name})" for s, (od, _) in direct_suffixes.items()),
-        )
+        if direct_suffixes:
+            logger.info(
+                "Direct embedded passthrough outputs: %s",
+                ", ".join(f"{s} ({od.output_name})" for s, (od, _) in direct_suffixes.items()),
+            )
 
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        # 5.2 构建 Pillow 源映射
-        #     外部贴图：直接使用磁盘文件
-        #     嵌入贴图：导出到临时目录（供 Pillow 使用）
-        pillow_mapping: Dict[str, str] = {}
-        for slot, matched_path in mapping.items():
-            if matched_path in embedded_lookup:
-                ue_path = embedded_lookup[matched_path]
-                disk_path = ops.export_texture_to_disk(ue_path, tmp_dir)
-                if disk_path:
-                    pillow_mapping[slot] = disk_path
-                    logger.info(
-                        "Exported embedded texture for slot '%s': %s → %s",
-                        slot, ue_path, disk_path,
-                    )
-            else:
-                pillow_mapping[slot] = matched_path
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # 5.2 构建 Pillow 源映射
+            #     外部贴图：直接使用磁盘文件
+            #     嵌入贴图：导出到临时目录（供 Pillow 使用）
+            pillow_mapping: Dict[str, str] = {}
+            for slot, matched_path in mapping.items():
+                if matched_path in embedded_lookup:
+                    ue_path = embedded_lookup[matched_path]
+                    disk_path = ops.export_texture_to_disk(ue_path, tmp_dir)
+                    if disk_path:
+                        pillow_mapping[slot] = disk_path
+                        logger.info(
+                            "Exported embedded texture for slot '%s': %s → %s",
+                            slot, ue_path, disk_path,
+                        )
+                    else:
+                        logger.warning(
+                            "Failed to export embedded texture for slot '%s': %s",
+                            slot, ue_path,
+                        )
+                else:
+                    pillow_mapping[slot] = matched_path
 
-        # 5.3 Pillow 处理（跳过已直接处理的输出）
+            # 5.3 Pillow 处理（跳过已直接处理的输出）
         if direct_suffixes:
             pillow_config = copy.deepcopy(config)
             for od in pillow_config.texture_output_definitions:
@@ -870,5 +911,224 @@ def run_import_pipeline(
         # 5.9 清理隔离区
         ops.delete_directory(isolation_path)
 
-    result.phase = "done"
+        result.phase = "done"
+    except Exception as e:
+        logger.error(
+            "Import pipeline failed at standardize phase: %s "
+            "— isolation zone preserved: %s", e, isolation_path,
+        )
+        result.errors.append(f"标准化阶段异常: {e}")
+
+    # NFR1: 性能预算检查
+    elapsed = time.monotonic() - t_start
+    if result.success:
+        if elapsed > _PERF_BUDGET_SECONDS:
+            logger.warning(
+                "Pipeline exceeded performance budget: %.2fs > %.1fs",
+                elapsed, _PERF_BUDGET_SECONDS,
+            )
+        else:
+            logger.info("Pipeline completed in %.2fs (budget: %.1fs)", elapsed, _PERF_BUDGET_SECONDS)
+    else:
+        logger.info("Pipeline stopped at phase '%s' after %.2fs", result.phase, elapsed)
+
     return result
+
+
+# ---------------------------------------------------------------------------
+# FR4 → FR5 恢复执行
+# ---------------------------------------------------------------------------
+
+def resume_after_triage(
+    pipeline_result: ImportPipelineResult,
+    corrected_mapping: Dict[str, str],
+    corrected_base_name: Optional[str] = None,
+    ops: Optional[UnrealAssetOps] = None,
+) -> ImportPipelineResult:
+    """FR4 分诊完成后，用修正后的映射继续执行 FR5 标准化。
+
+    Args:
+        pipeline_result: run_import_pipeline 返回的（失败）结果。
+        corrected_mapping: 用户在分诊 UI 中修正后的 {slot: file_path} 映射。
+        corrected_base_name: 用户修正后的资产基础名，None 则沿用原值。
+        ops: Unreal 资产操作接口。
+
+    Returns:
+        更新后的 ImportPipelineResult。
+    """
+    if ops is None:
+        ops = UnrealAssetOps()
+
+    t_start = time.monotonic()
+
+    tc = pipeline_result.triage_context
+    if tc is None or tc.config is None:
+        pipeline_result.errors.append("缺少分诊上下文，无法恢复管线")
+        return pipeline_result
+
+    config = tc.config
+    category = tc.category
+    current_path = tc.current_path
+    base_name = corrected_base_name or tc.base_name
+    isolation_path = pipeline_result.isolation_path
+    embedded_lookup = tc.embedded_lookup
+
+    check_result = pipeline_result.check_result
+    if check_result is None:
+        pipeline_result.errors.append("缺少检查结果")
+        return pipeline_result
+
+    # 用修正后的映射覆盖原始映射
+    if check_result.match_result is None:
+        check_result.match_result = MatchResult()
+    check_result.match_result.mapping = dict(corrected_mapping)
+
+    # --- 阶段 4：解析名称 ---
+    names = resolve_names(config, base_name, category, current_path)
+    pipeline_result.names = names
+
+    # --- 阶段 5：标准化 ---
+    # NFR3: try/except 保护，失败时保留隔离区 + 清晰日志
+    pipeline_result.phase = "standardize"
+    try:
+        mapping = check_result.match_result.mapping
+
+        # 5.1 识别直通嵌入贴图
+        direct_suffixes: Dict[str, tuple] = {}
+        for output_def in config.texture_output_definitions:
+            if not output_def.enabled:
+                continue
+            source_slot = _is_direct_passthrough(output_def)
+            if source_slot is None or source_slot not in mapping:
+                continue
+            matched_path = mapping[source_slot]
+            if matched_path not in embedded_lookup:
+                continue
+            direct_suffixes[output_def.suffix] = (output_def, embedded_lookup[matched_path])
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            # 5.2 Pillow 源映射
+            pillow_mapping: Dict[str, str] = {}
+            for slot, matched_path in mapping.items():
+                if matched_path in embedded_lookup:
+                    ue_path = embedded_lookup[matched_path]
+                    disk_path = ops.export_texture_to_disk(ue_path, tmp_dir)
+                    if disk_path:
+                        pillow_mapping[slot] = disk_path
+                    else:
+                        logger.warning(
+                            "Failed to export embedded texture for slot '%s': %s",
+                            slot, ue_path,
+                        )
+                else:
+                    pillow_mapping[slot] = matched_path
+
+            # 5.3 Pillow 处理
+            if direct_suffixes:
+                pillow_config = copy.deepcopy(config)
+                for od in pillow_config.texture_output_definitions:
+                    if od.suffix in direct_suffixes:
+                        od.enabled = False
+            else:
+                pillow_config = config
+
+            std_result = process_textures(
+                pillow_config, pillow_mapping, tmp_dir, base_name, category,
+            )
+
+            if not std_result.success:
+                pipeline_result.errors.extend(std_result.errors)
+                return pipeline_result
+
+            # 5.4 目标路径
+            target_path = names.target_path
+            final_target = resolve_conflict(
+                target_path, config.conflict_policy, ops.asset_exists,
+            )
+            if final_target is None:
+                pipeline_result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
+                return pipeline_result
+
+            # 移动 StaticMesh
+            if check_result.static_mesh:
+                sm_src = f"{isolation_path}/{check_result.static_mesh}"
+                sm_dst = f"{final_target}/{names.static_mesh}"
+                ops.rename_asset(sm_src, sm_dst)
+
+            # 5.5 直接嵌入贴图
+            all_processed: List[ProcessedTexture] = []
+            for suffix, (output_def, ue_tex_path) in direct_suffixes.items():
+                tex_name = names.texture_names.get(suffix)
+                if not tex_name:
+                    continue
+                new_path = f"{final_target}/{tex_name}"
+                ops.rename_asset(ue_tex_path, new_path)
+                imp = output_def.import_settings
+                settings = {
+                    "compression": imp.compression,
+                    "lod_group": imp.lod_group,
+                    "srgb": output_def.srgb,
+                    "virtual_texture": imp.virtual_texture,
+                }
+                ops.apply_texture_import_settings(new_path, settings)
+                all_processed.append(ProcessedTexture(
+                    output_name=output_def.output_name,
+                    suffix=suffix,
+                    file_path=new_path,
+                    material_parameter=output_def.material_parameter,
+                    import_settings=settings,
+                    srgb=output_def.srgb,
+                ))
+
+            # 5.6 导入 Pillow 贴图
+            for proc_tex in std_result.textures:
+                ops.import_texture_file(proc_tex.file_path, final_target)
+
+            all_processed.extend(std_result.textures)
+            pipeline_result.standardize_result = StandardizeResult(textures=all_processed)
+
+            # 5.7 MIC 创建
+            mi = None
+            if config.default_master_material_path:
+                mi_path = f"{final_target}/{names.material_instance}"
+                mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+
+                for proc_tex in all_processed:
+                    tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
+                    tex_ue_path = f"{final_target}/{tex_ue_name}"
+                    if mi and proc_tex.material_parameter:
+                        ops.set_material_texture_param(mi, proc_tex.material_parameter, tex_ue_path)
+                    if proc_tex.suffix not in direct_suffixes:
+                        ops.apply_texture_import_settings(tex_ue_path, proc_tex.import_settings)
+
+            # 5.8 绑定 SM → MI
+            if mi and check_result.static_mesh:
+                sm_dst = f"{final_target}/{names.static_mesh}"
+                mi_path = f"{final_target}/{names.material_instance}"
+                ops.set_static_mesh_material(sm_dst, mi_path)
+
+            # 5.9 清理隔离区
+            ops.delete_directory(isolation_path)
+
+        pipeline_result.phase = "done"
+    except Exception as e:
+        logger.error(
+            "Resume-after-triage failed at standardize phase: %s "
+            "— isolation zone preserved: %s", e, isolation_path,
+        )
+        pipeline_result.errors.append(f"分诊后标准化异常: {e}")
+
+    # NFR1: 性能预算检查
+    elapsed = time.monotonic() - t_start
+    if pipeline_result.success:
+        if elapsed > _PERF_BUDGET_SECONDS:
+            logger.warning(
+                "Resume-after-triage exceeded performance budget: %.2fs > %.1fs",
+                elapsed, _PERF_BUDGET_SECONDS,
+            )
+        else:
+            logger.info("Resume-after-triage completed in %.2fs (budget: %.1fs)", elapsed, _PERF_BUDGET_SECONDS)
+    else:
+        logger.info("Resume-after-triage stopped at phase '%s' after %.2fs", pipeline_result.phase, elapsed)
+
+    return pipeline_result

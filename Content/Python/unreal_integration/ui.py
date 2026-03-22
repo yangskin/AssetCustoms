@@ -138,16 +138,18 @@ class AssetCustomsUI:
         if not presets:
             placeholder = self.make_py_entry(
                 entry_name=f"{section}.NoPreset",
-                label="No Presets Found",
-                tooltip="Put *.jsonc under Content/Config/AssetCustoms",
-                python="import unreal; unreal.log_warning('[AssetCustoms] No presets found')",
+                label="\u26a0 \u914d\u7f6e\u7f3a\u5931 (Config Missing)",
+                tooltip="\u672a\u627e\u5230\u914d\u7f6e\u6587\u4ef6\u3002\u8bf7\u5c06 .jsonc \u653e\u5165 Content/Config/AssetCustoms/\n"
+                        "No preset configs found. Place .jsonc files under Content/Config/AssetCustoms/",
+                python="import unreal; unreal.log_error('[AssetCustoms] \u914d\u7f6e\u7f3a\u5931: \u672a\u5728 Content/Config/AssetCustoms/ \u627e\u5230 .jsonc \u6587\u4ef6\u3002\u8bf7\u653e\u7f6e\u914d\u7f6e\u540e\u91cd\u542f\u7f16\u8f91\u5668\u3002')",
                 is_toolbar=False,
-                icon={"style_set": "EditorStyle", "style_name": "Icons.Warning"},
+                icon={"style_set": "EditorStyle", "style_name": "Icons.Error"},
             )
             try:
                 sub_menu.add_menu_entry(section, placeholder)
             except Exception:
                 pass
+            unreal.log_warning("[AssetCustoms] NFR4: \u672a\u53d1\u73b0\u914d\u7f6e\u6587\u4ef6\uff0c\u4e0b\u62c9\u83dc\u5355\u5df2\u7981\u7528\u3002\u8bf7\u5c06 .jsonc \u653e\u5165 Content/Config/AssetCustoms/")
             return
 
         for p in presets:

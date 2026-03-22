@@ -67,6 +67,16 @@ class AssetCustomsActions:
 
     def on_pick_fbx_with_preset(self, preset_path: str) -> None:
         """基于指定预设执行 FBX 选择，并触发完整导入管道。"""
+        import os
+
+        # NFR4: 配置文件存在性检查
+        if not preset_path or not os.path.isfile(preset_path):
+            unreal.log_error(
+                f"[AssetCustoms] 配置文件不存在或路径无效: {preset_path}\n"
+                "请确认 Content/Config/AssetCustoms/ 下有有效的 .jsonc 文件。"
+            )
+            return
+
         unreal.log(f"[AssetCustoms] Preset selected: {preset_path}")
         paths = self._open_fbx_file_dialog()
         if not paths:
@@ -99,13 +109,65 @@ class AssetCustomsActions:
             if result.success:
                 unreal.log(f"[AssetCustoms] 标准化完成: {result.names.target_path if result.names else 'N/A'}")
             elif result.check_result and not result.check_result.passed:
-                # 检查失败 → 需要分诊 UI（FR4，待实现）
+                # 检查失败 → 弹出分诊 UI（FR4）
                 reasons = "; ".join(f.reason for f in result.check_result.failures)
                 unreal.log_warning(f"[AssetCustoms] 检查未通过: {reasons}")
                 unreal.log_warning(f"[AssetCustoms] 资产保留在隔离区: {result.isolation_path}")
+                self._show_triage_ui(result)
             else:
                 for err in result.errors:
                     unreal.log_error(f"[AssetCustoms] {err}")
 
         except Exception as ex:
             unreal.log_error(f"[AssetCustoms] Import pipeline failed: {ex}")
+
+    # ---- FR4 分诊 UI ----
+    def _show_triage_ui(self, pipeline_result) -> None:
+        """弹出分诊 UI 窗口，用户修正映射后继续执行 FR5。"""
+        try:
+            import unreal_qt
+            from core.pipeline.triage_ui import TriageWindow
+            from unreal_integration.import_pipeline import resume_after_triage
+
+            unreal_qt.setup()
+
+            tc = pipeline_result.triage_context
+            base_name = tc.base_name if tc else ""
+            all_textures = tc.all_texture_paths if tc else []
+
+            def on_accept(decision):
+                unreal.log(f"[AssetCustoms] 分诊确认: base_name={decision.base_name}, "
+                           f"mapping={len(decision.corrected_mapping)} slots")
+                try:
+                    resumed = resume_after_triage(
+                        pipeline_result=pipeline_result,
+                        corrected_mapping=decision.corrected_mapping,
+                        corrected_base_name=decision.base_name,
+                    )
+                    if resumed.success:
+                        unreal.log(f"[AssetCustoms] 分诊后标准化完成: "
+                                   f"{resumed.names.target_path if resumed.names else 'N/A'}")
+                    else:
+                        for err in resumed.errors:
+                            unreal.log_error(f"[AssetCustoms] {err}")
+                except Exception as ex:
+                    unreal.log_error(f"[AssetCustoms] 分诊后执行失败: {ex}")
+
+            def on_cancel():
+                unreal.log_warning(
+                    f"[AssetCustoms] 分诊取消，资产保留在隔离区: {pipeline_result.isolation_path}")
+
+            window = TriageWindow(
+                check_result=pipeline_result.check_result,
+                base_name=base_name,
+                all_texture_paths=all_textures,
+                on_accept=on_accept,
+                on_cancel=on_cancel,
+            )
+            window.show()
+            unreal_qt.wrap(window)
+            unreal.log("[AssetCustoms] FR4 分诊 UI 已弹出")
+
+        except Exception as ex:
+            unreal.log_error(f"[AssetCustoms] 分诊 UI 打开失败: {ex}")
+            unreal.log_warning(f"[AssetCustoms] 资产保留在隔离区: {pipeline_result.isolation_path}")

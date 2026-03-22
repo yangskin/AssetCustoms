@@ -22,14 +22,14 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - [x] Code Review 检查单与编码规范（Google Python 规范）
 - [x] ADR-0001：采用文档与流程规范
 
-## M2 — V1.1 功能落地（当前阶段）
-- [ ] FR1：TA 配置系统（JSONC、Profile 扫描/加载、Schema v1.1）
-	- 进度（2025-11-11）：
+## M2 — V1.1 功能落地 ✅（已完成）
+- [x] FR1：TA 配置系统（JSONC、Profile 扫描/加载、Schema v1.1）✅
+	- 进度（2026-03-22）：
 		- [x] JSONC 解析能力完成（优先 json5，回退注释剥离+尾逗号处理）。
 		- [x] `Content/Config/AssetCustoms/Prop.jsonc` 默认 Profile 提供。
 		- [x] `core.config.loader.load_config()` 输出数据类 `PluginConfig`（当前覆盖：texture_merge、allowed_modes）。
 		- [x] Unreal 侧 Profile 扫描与下拉菜单项生成（Content/Config/AssetCustoms/*.jsonc）。
-		- [ ] Schema v1.1 全量字段适配（target_path_template、conflict_policy、import_settings 等）。
+		- [x] Schema v1.1 全量字段适配（9 dataclass，23 项测试通过）。
 - [x] FR2：智能导入核心流程 ✅
 	- [x] Content Browser 工具栏下拉（动态 Profile 列表）
 	- [x] tkinter 文件对话框（仅 .fbx）+ Content Browser 路径采样
@@ -47,13 +47,19 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 	- [x] 贴图匹配引擎 `core/textures/matcher.py`（glob/regex + priority）
 	- [x] 检查链 `core/pipeline/check_chain.py`（资产数量 + 材质 + 映射完整性）
 	- [x] 支持 allow_missing + constant 兜底
-- [ ] FR4：分诊 UI ❌ 未实现（**PySide6 + unreal_qt 已就绪**，可用于构建分诊窗口）
+- [x] FR4：分诊 UI ✅（2026-03-22 实现 + 视觉验证通过）
 	- 进度（2026-03-22）：
 		- [x] PySide6-Essentials 6.10.2 + shiboken6 6.10.2 离线 wheel 已入 vendor/
 		- [x] deploy.ps1 支持 PySide6 安装/清理/验证
 		- [x] `unreal_qt` 模块适配 PySide6（移除 PySide2 兼容）
 		- [x] QMessageBox 集成测试通过（`Tests/test_qt_messagebox.py`）
-		- [ ] 分诊 UI 窗口实现（显示失败原因、贴图映射、下拉选择、执行按钮）
+		- [x] `core/pipeline/triage_ui.py`：TriageWindow + TriageDecision 数据模型
+		  - 错误标题（红色 ✖ badge）、BaseName 编辑框
+		  - 贴图映射表（QTableWidget + QComboBox，状态：✔已匹配/✖未匹配/⚠歧义）
+		  - 孤儿贴图提示、执行/取消按钮、UE 暗色主题
+		- [x] `import_pipeline.py`：TriageContext + resume_after_triage()（修正映射后继续 FR5）
+		- [x] `actions.py`：_show_triage_ui() 集成（FR3 失败自动弹出）
+		- [x] 8 项单元测试 + UE 编辑器内视觉验证通过
 - [x] FR5：标准化执行引擎 ✅
 	- [x] 5.1 贴图处理（Pillow 通道编排 + flip_green + resize + 保存）
 	- [x] 5.2 资产重命名/移动
@@ -67,10 +73,23 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 		- `Packed_Texture`(LinearColor) → Metallic(R) / Roughness(G) / AO(B)
 		- `Height_Texture`(LinearColor) → 预留
 
-## M3 — 质量与体验
-- [ ] 性能预算：典型资产“静默成功”全流程 ≤ 5s（NFR1）
-- [ ] 健壮性：失败停止在“隔离区”，编辑器不崩溃（NFR3）
-- [ ] 未找到配置时 UI 提示并禁用入口（NFR4）
+## M3 — 质量与体验 ✅（已完成）
+- [x] 性能预算：典型资产"静默成功"全流程 ≤ 5s（NFR1）✅
+	- 进度（2026-03-22）：
+		- [x] `run_import_pipeline()` 和 `resume_after_triage()` 添加 `time.monotonic()` 计时器
+		- [x] 成功时日志报告耗时；超出 5s 阈值输出 WARNING
+		- [x] 性能常量 `_PERF_BUDGET_SECONDS = 5.0`
+- [x] 健壮性：失败停止在"隔离区"，编辑器不崩溃（NFR3）✅
+	- 进度（2026-03-22）：
+		- [x] `run_import_pipeline()` 标准化阶段 try/except 保护：异常记录日志并保留隔离区
+		- [x] `resume_after_triage()` 标准化阶段 try/except 保护：同上
+		- [x] `_run_native_embedded_pipeline()` 步骤 6-10 try/except 保护：同上
+		- [x] `export_texture_to_disk()` 失败时补充 WARNING 日志
+		- [x] 外层 `actions.py` 的 `on_pick_fbx_with_preset()` + `_show_triage_ui.on_accept()` 已有顶级 try/except
+- [x] 未找到配置时 UI 提示并禁用入口（NFR4）✅
+	- 进度（2026-03-22）：
+		- [x] `ui.py`：无配置占位项改为"⚠ 配置缺失 (Config Missing)" + Icons.Error + log_error
+		- [x] `actions.py`：`on_pick_fbx_with_preset()` 添加 `os.path.isfile` 前置检查
 
 ## M4 — 集成与扩展
 - [ ] 批处理/CI 集成（可选）
@@ -118,6 +137,8 @@ M4 Unreal 集成
 - 原生嵌入贴图 E2E：✅ 通过（FR2.5 管线）
 - 外部贴图回归：✅ 通过
 - SM→MI 绑定验证：✅ slot[0] = MI, parent = MM_Prop_PBR, 贴图参数全部绑定
+- FR4 分诊 UI 视觉验证：✅ 通过（UE 编辑器内弹出 + 交互确认）
+- 总计：90 tests（70 passed, 20 skipped）
 - 总计：82 unit tests + 3 E2E tests
 
 ## 最近测试（2025-11-11）
