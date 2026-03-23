@@ -171,3 +171,43 @@ class AssetCustomsActions:
         except Exception as ex:
             unreal.log_error(f"[AssetCustoms] 分诊 UI 打开失败: {ex}")
             unreal.log_warning(f"[AssetCustoms] 资产保留在隔离区: {pipeline_result.isolation_path}")
+
+    # ---- 配置编辑器 ----
+    def on_open_config_editor(self) -> None:
+        """打开 JSONC 配置编辑器窗口。"""
+        try:
+            import os
+            import unreal_qt
+            from unreal_integration.config_editor import open_config_editor
+
+            unreal_qt.setup()
+
+            # 查找配置目录
+            config_dir = None
+            try:
+                _here = os.path.abspath(__file__)
+                _plugin_content = os.path.dirname(os.path.dirname(os.path.dirname(_here)))
+                _cfg = os.path.join(_plugin_content, "Config", "AssetCustoms")
+                if os.path.isdir(_cfg):
+                    config_dir = _cfg
+            except Exception:
+                pass
+            if not config_dir:
+                try:
+                    content_dir = unreal.Paths.project_content_dir()
+                    _cfg = os.path.join(content_dir, "Config", "AssetCustoms")
+                    if os.path.isdir(_cfg):
+                        config_dir = _cfg
+                except Exception:
+                    pass
+
+            if not config_dir:
+                unreal.log_error("[AssetCustoms] 未找到配置目录 Content/Config/AssetCustoms/")
+                return
+
+            window = open_config_editor(config_dir=config_dir)
+            unreal_qt.wrap(window)
+            unreal.log("[AssetCustoms] 配置编辑器已打开")
+
+        except Exception as ex:
+            unreal.log_error(f"[AssetCustoms] 配置编辑器打开失败: {ex}")

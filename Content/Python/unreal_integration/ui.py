@@ -167,6 +167,21 @@ class AssetCustomsUI:
             except Exception:
                 pass
 
+        # Config Editor 入口——放在下拉菜单第一项（使用 FIRST 插入位置）
+        ce_cmd = self._build_python_command("on_open_config_editor")
+        ce_entry = self.make_py_entry(
+            entry_name=f"{section}.OpenConfigEditor",
+            label="\u2699 Config Editor",
+            tooltip="Open graphical config editor for AssetCustoms presets",
+            python=ce_cmd,
+            is_toolbar=False,
+            icon={"style_set": "EditorStyle", "style_name": "Icons.Settings"},
+        )
+        try:
+            sub_menu.add_menu_entry(section, ce_entry)
+        except Exception:
+            pass
+
     @staticmethod
     def make_py_entry(entry_name: str, label: str, tooltip: str, python: str, *, is_toolbar: bool = False, icon: dict | None = None) -> unreal.ToolMenuEntry:
         """构造一个执行 Python 命令的菜单/工具栏项。"""
