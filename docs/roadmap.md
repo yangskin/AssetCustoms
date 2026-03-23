@@ -108,14 +108,14 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - [x] 确认已有保护机制完好（管线异常隔离、隔离区保留、性能预算、批处理隔离等）
 - [x] 文档同步：architecture.md 新增审计章节、testing.md 更新测试状态、roadmap.md 更新
 
-## M5 — Config v2.0 三段式管线模型（设计已确认 2026-03-23）
+## M5 — Config v2.0 三段式管线模型 ✅（已完成 2026-03-23）
 
 > 设计文档：[ADR-0002](./decisions/ADR-0002-config-v2-pipeline-model.md)（状态：已确认）
 
 **目标**：将扁平的 v1.1 配置重构为 Input → Processing → Output 三段式嵌套结构，消除"处理定义"与"交付设置"混杂的问题：
 - `input`：贴图识别规则（`texture_rules`），Mesh/Material 仅注释占位。
-- `processing`：命名模板、冲突策略、贴图处理定义（Pillow 通道编排 + format/bit_depth/srgb/mips）。
-- `output`：目标路径、子目录、导入设置默认值、逐贴图 import override（集中表格）。
+- `processing`：冲突策略、Mesh 导入设置、贴图处理定义（Pillow 通道编排 + format/bit_depth/srgb/mips）。
+- `output`：目标路径、子目录、命名模板、材质绑定、导入设置默认值、逐贴图 import override（集中表格）。
 
 **关键决策**（Q1-Q6 已确认）：
 - `format`/`bit_depth`/`srgb`/`mips` 保留在 `processing`
@@ -125,12 +125,12 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - `input.mesh`/`input.material` 暂留注释占位
 - `texture_import_overrides` 采用 Output Tab 集中表格（方案 A）
 
-**实施计划**（5 步）：
-- [ ] Step 1：Schema + Loader 重写（`schema.py` → 3 dataclass 嵌套，`loader.py` 适配）
-- [ ] Step 2：JSONC 模板迁移（`Prop.jsonc`、`Character.jsonc` → v2.0 结构）
-- [ ] Step 3：管线代码适配（`naming.py`、`import_pipeline.py`、`standardize.py` 等字段路径更新）
-- [ ] Step 4：Config Editor UI 重构（3 Tab：Input / Processing / Output）
-- [ ] Step 5：测试 & 回归（全量测试通过 + E2E 验证）
+**实施计划**（5 步全部完成）：
+- [x] Step 1：Schema + Loader 重写（`schema.py` → `InputConfig`/`ProcessingConfig`/`OutputConfig` 三层嵌套，`loader.py` 适配）
+- [x] Step 2：JSONC 模板迁移（`Prop.jsonc`、`Character.jsonc` → v2.0 结构，`config_version: "2.0"`）
+- [x] Step 3：管线代码适配（`naming.py`、`import_pipeline.py`、`standardize.py` 全部使用 v2.0 字段路径）
+- [x] Step 4：Config Editor UI 重构（3 Tab：Input / Processing / Output，含双语支持）
+- [x] Step 5：测试 & 回归（90 tests: 70 passed, 20 skipped + E2E 验证通过）
 
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。
