@@ -81,6 +81,138 @@ def _save_jsonc(path: str, data: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
+# 多语言支持
+# ---------------------------------------------------------------------------
+
+_LANG: str = "en"
+
+_TR: dict[str, dict[str, str]] = {
+    # Window
+    "window_title":          {"en": "AssetCustoms Config Editor", "zh": "AssetCustoms 配置编辑器"},
+    # Toolbar
+    "config_label":          {"en": "Config:", "zh": "配置:"},
+    "btn_new":               {"en": "New", "zh": "新建"},
+    "btn_new_tip":           {"en": "Create a new config file", "zh": "创建新配置文件"},
+    "btn_dup":               {"en": "Duplicate", "zh": "复制"},
+    "btn_dup_tip":           {"en": "Duplicate currently loaded config", "zh": "复制当前配置"},
+    "btn_del":               {"en": "Delete", "zh": "删除"},
+    "btn_del_tip":           {"en": "Delete selected config file", "zh": "删除选中的配置文件"},
+    "btn_reload":            {"en": "Reload", "zh": "重载"},
+    "btn_reload_tip":        {"en": "Reload from disk", "zh": "从磁盘重新加载"},
+    "btn_save":              {"en": "💾 Save", "zh": "💾 保存"},
+    "btn_save_tip":          {"en": "Save to disk (Ctrl+S)", "zh": "保存到磁盘 (Ctrl+S)"},
+    "btn_refresh":           {"en": "↻ Refresh Menu", "zh": "↻ 刷新菜单"},
+    "btn_refresh_tip":       {"en": "Refresh the import preset dropdown in Content Browser",
+                              "zh": "刷新内容浏览器中的导入预设下拉菜单"},
+    # Tabs
+    "tab_general":           {"en": "General", "zh": "基础设置"},
+    "tab_input":             {"en": "Input Rules", "zh": "输入规则"},
+    "tab_output":            {"en": "Output Definitions", "zh": "输出定义"},
+    # General tab
+    "grp_paths":             {"en": "Paths && Policies", "zh": "路径 && 策略"},
+    "master_mat":            {"en": "Master Material", "zh": "母材质"},
+    "master_mat_tip":        {"en": "Master material UE path (empty = no MI)", "zh": "母材质 UE 路径（空 = 不创建材质实例）"},
+    "fallback_path":         {"en": "Fallback Import Path", "zh": "回退导入路径"},
+    "fallback_path_tip":     {"en": "Fallback path when target calculation fails", "zh": "目标路径计算失败时的回退路径"},
+    "target_tpl":            {"en": "Target Path Template", "zh": "目标路径模板"},
+    "target_tpl_tip":        {"en": "Asset directory template, supports {Category}, {Name}",
+                              "zh": "资产落地目录模板，支持 {Category}, {Name}"},
+    "conflict":              {"en": "Conflict Policy", "zh": "冲突策略"},
+    "conflict_tip":          {"en": "Naming conflict policy", "zh": "命名冲突策略"},
+    "grp_naming":            {"en": "Asset Naming Templates", "zh": "资产命名模板"},
+    "nm_sm":                 {"en": "Static Mesh", "zh": "静态网格"},
+    "nm_sm_tip":             {"en": "Static mesh naming template", "zh": "静态网格命名模板"},
+    "nm_mi":                 {"en": "Material Instance", "zh": "材质实例"},
+    "nm_mi_tip":             {"en": "Material instance naming template", "zh": "材质实例命名模板"},
+    "nm_tex":                {"en": "Texture", "zh": "贴图"},
+    "nm_tex_tip":            {"en": "Texture naming template", "zh": "贴图命名模板"},
+    # Input rules tab
+    "grp_match":             {"en": "Match Settings", "zh": "匹配设置"},
+    "match_mode":            {"en": "Match Mode", "zh": "匹配模式"},
+    "ignore_case":           {"en": "Ignore Case", "zh": "忽略大小写"},
+    "extensions":            {"en": "Allowed Extensions", "zh": "允许的扩展名"},
+    "extensions_tip":        {"en": "Recognized texture file extensions", "zh": "识别的贴图扩展名"},
+    "search_roots":          {"en": "Search Roots", "zh": "搜索根目录"},
+    "search_roots_tip":      {"en": "Search root dirs, {DropDir} = FBX directory",
+                              "zh": "搜索根目录，{DropDir} = FBX 所在目录"},
+    "input_rules_hdr":       {"en": "Texture Input Rules", "zh": "贴图输入规则"},
+    "btn_add_rule":          {"en": "+ Add Rule", "zh": "+ 添加规则"},
+    "btn_del_rule":          {"en": "Delete Selected Rule", "zh": "删除选中规则"},
+    "col_name":              {"en": "Name", "zh": "名称"},
+    "col_priority":          {"en": "Priority", "zh": "优先级"},
+    "col_patterns":          {"en": "Patterns (comma-separated)", "zh": "匹配模式（逗号分隔）"},
+    # Output definitions
+    "btn_add_output":        {"en": "+ Add Output", "zh": "+ 添加输出"},
+    "btn_del_output":        {"en": "Delete This Output", "zh": "删除此输出"},
+    "out_enabled":           {"en": "Enabled", "zh": "启用"},
+    "out_enabled_tip":       {"en": "Enable this output", "zh": "是否启用此输出"},
+    "out_name":              {"en": "Output Name", "zh": "输出名称"},
+    "out_name_tip":          {"en": "Output name (e.g. Diffuse, Normal)", "zh": "输出名称（如 Diffuse, Normal）"},
+    "out_suffix":            {"en": "Suffix", "zh": "后缀"},
+    "out_suffix_tip":        {"en": "File suffix (e.g. D, N, MRO)", "zh": "文件后缀（如 D, N, MRO）"},
+    "out_category":          {"en": "Category", "zh": "类别"},
+    "out_category_tip":      {"en": "Category tag", "zh": "类别标签"},
+    "out_mat_param":         {"en": "Material Param", "zh": "材质参数"},
+    "out_mat_param_tip":     {"en": "Material instance parameter name", "zh": "材质实例参数名"},
+    "out_srgb":              {"en": "sRGB", "zh": "sRGB"},
+    "out_format":            {"en": "Format", "zh": "格式"},
+    "out_bits":              {"en": "Bit Depth", "zh": "位深度"},
+    "out_mips":              {"en": "Mips", "zh": "Mips"},
+    "out_allow_miss":        {"en": "Allow Missing", "zh": "允许缺失"},
+    "out_allow_miss_tip":    {"en": "Still output when source is missing", "zh": "源贴图缺失时仍输出"},
+    "out_flip_g":            {"en": "Flip Green", "zh": "翻转绿色通道"},
+    "out_flip_g_tip":        {"en": "Invert normal G channel", "zh": "反转法线 G 通道"},
+    "out_alpha_pre":         {"en": "Alpha Premultiplied", "zh": "预乘 Alpha"},
+    "out_normal_sp":         {"en": "Normal Space", "zh": "法线空间"},
+    "grp_channels":          {"en": "Channel Mapping", "zh": "通道映射"},
+    "grp_import":            {"en": "Import Settings", "zh": "导入设置"},
+    "out_compress":          {"en": "Compression", "zh": "压缩"},
+    "out_lod":               {"en": "LOD Group", "zh": "LOD 组"},
+    "out_vt":                {"en": "Virtual Texture", "zh": "虚拟纹理"},
+    "out_addr_x":            {"en": "Address X", "zh": "寻址 X"},
+    "out_addr_y":            {"en": "Address Y", "zh": "寻址 Y"},
+    "out_mipgen":            {"en": "Mip Gen", "zh": "Mip 生成"},
+    # Channel row
+    "ch_source":             {"en": "Source:", "zh": "来源:"},
+    "ch_ch":                 {"en": "Ch:", "zh": "通道:"},
+    "ch_const":              {"en": "Constant:", "zh": "常量:"},
+    "ch_invert":             {"en": "Invert", "zh": "反转"},
+    # Status
+    "st_ready":              {"en": "Ready", "zh": "就绪"},
+    "st_no_file":            {"en": "No file to save", "zh": "没有可保存的文件"},
+    "st_created":            {"en": "Created: {n}", "zh": "已创建: {n}"},
+    "st_saved":              {"en": "Saved: {n}", "zh": "已保存: {n}"},
+    "st_deleted":            {"en": "Deleted: {n}", "zh": "已删除: {n}"},
+    "st_duplicated":         {"en": "Duplicated to: {n}", "zh": "已复制为: {n}"},
+    "st_loaded":             {"en": "Loaded: {n}", "zh": "已加载: {n}"},
+    # Dialogs
+    "dlg_new":               {"en": "New Config", "zh": "新建配置"},
+    "dlg_new_p":             {"en": "Config name (without extension):", "zh": "配置名称（不含扩展名）:"},
+    "dlg_dup":               {"en": "Duplicate", "zh": "复制配置"},
+    "dlg_dup_p":             {"en": "New config name:", "zh": "新配置名称:"},
+    "dlg_del":               {"en": "Delete Config", "zh": "删除配置"},
+    "dlg_del_p":             {"en": "Permanently delete {n}?", "zh": "永久删除 {n}？"},
+    "dlg_exists":            {"en": "Exists", "zh": "已存在"},
+    "dlg_exists_p":          {"en": "{n} already exists.", "zh": "{n} 已存在。"},
+    "dlg_error":             {"en": "Error", "zh": "错误"},
+    "dlg_del_fail":          {"en": "Delete failed:\n{e}", "zh": "删除失败:\n{e}"},
+    "dlg_save_fail":         {"en": "Save failed:\n{e}", "zh": "保存失败:\n{e}"},
+    "dlg_load_fail":         {"en": "Failed to load:\n{e}", "zh": "加载失败:\n{e}"},
+    "dlg_add_item":          {"en": "Add Item", "zh": "添加项目"},
+    "dlg_add_item_p":        {"en": "Value:", "zh": "值:"},
+    "dlg_add_rule":          {"en": "New Rule", "zh": "新建规则"},
+    "dlg_add_rule_p":        {"en": "Rule name (e.g. BaseColor):", "zh": "规则名称（如 BaseColor）:"},
+}
+
+
+def _t(key: str, **kw) -> str:
+    """Return translated string for current language."""
+    entry = _TR.get(key, {})
+    text = entry.get(_LANG, entry.get("en", key))
+    return text.format(**kw) if kw else text
+
+
+# ---------------------------------------------------------------------------
 # 禁用滚轮的控件子类（防止美术误操作）
 # ---------------------------------------------------------------------------
 
@@ -208,12 +340,12 @@ class LabeledLine(QtWidgets.QWidget):
         super().__init__(parent)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lbl = QtWidgets.QLabel(label)
-        lbl.setFixedWidth(160)
-        lbl.setToolTip(tooltip)
+        self._lbl = QtWidgets.QLabel(label)
+        self._lbl.setFixedWidth(160)
+        self._lbl.setToolTip(tooltip)
         self.edit = QtWidgets.QLineEdit(value)
         self.edit.setToolTip(tooltip)
-        lay.addWidget(lbl)
+        lay.addWidget(self._lbl)
         lay.addWidget(self.edit, 1)
 
     def value(self) -> str:
@@ -230,9 +362,9 @@ class LabeledCombo(QtWidgets.QWidget):
         super().__init__(parent)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lbl = QtWidgets.QLabel(label)
-        lbl.setFixedWidth(160)
-        lbl.setToolTip(tooltip)
+        self._lbl = QtWidgets.QLabel(label)
+        self._lbl.setFixedWidth(160)
+        self._lbl.setToolTip(tooltip)
         self.combo = NoScrollComboBox()
         self.combo.setEditable(editable)
         self.combo.addItems(items)
@@ -241,7 +373,7 @@ class LabeledCombo(QtWidgets.QWidget):
             self.combo.setCurrentText(current)
         elif editable and current:
             self.combo.setCurrentText(current)
-        lay.addWidget(lbl)
+        lay.addWidget(self._lbl)
         lay.addWidget(self.combo, 1)
 
     def value(self) -> str:
@@ -276,14 +408,14 @@ class LabeledSpin(QtWidgets.QWidget):
         super().__init__(parent)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lbl = QtWidgets.QLabel(label)
-        lbl.setFixedWidth(160)
-        lbl.setToolTip(tooltip)
+        self._lbl = QtWidgets.QLabel(label)
+        self._lbl.setFixedWidth(160)
+        self._lbl.setToolTip(tooltip)
         self.spin = NoScrollSpinBox()
         self.spin.setRange(minimum, maximum)
         self.spin.setValue(value)
         self.spin.setToolTip(tooltip)
-        lay.addWidget(lbl)
+        lay.addWidget(self._lbl)
         lay.addWidget(self.spin, 1)
 
     def value(self) -> int:
@@ -300,15 +432,15 @@ class LabeledFloat(QtWidgets.QWidget):
         super().__init__(parent)
         lay = QtWidgets.QHBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
-        lbl = QtWidgets.QLabel(label)
-        lbl.setFixedWidth(160)
-        lbl.setToolTip(tooltip)
+        self._lbl = QtWidgets.QLabel(label)
+        self._lbl.setFixedWidth(160)
+        self._lbl.setToolTip(tooltip)
         self.spin = NoScrollDoubleSpinBox()
         self.spin.setRange(minimum, maximum)
         self.spin.setDecimals(decimals)
         self.spin.setValue(value)
         self.spin.setToolTip(tooltip)
-        lay.addWidget(lbl)
+        lay.addWidget(self._lbl)
         lay.addWidget(self.spin, 1)
 
     def value(self) -> float:
@@ -326,9 +458,9 @@ class EditableListWidget(QtWidgets.QWidget):
         main = QtWidgets.QVBoxLayout(self)
         main.setContentsMargins(0, 0, 0, 0)
         main.setSpacing(2)
-        lbl = QtWidgets.QLabel(label)
-        lbl.setToolTip(tooltip)
-        main.addWidget(lbl)
+        self._title_lbl = QtWidgets.QLabel(label)
+        self._title_lbl.setToolTip(tooltip)
+        main.addWidget(self._title_lbl)
 
         row = QtWidgets.QHBoxLayout()
         self._list = QtWidgets.QListWidget()
@@ -353,7 +485,7 @@ class EditableListWidget(QtWidgets.QWidget):
         main.addLayout(row)
 
     def _on_add(self) -> None:
-        text, ok = QtWidgets.QInputDialog.getText(self, "Add Item", "Value:")
+        text, ok = QtWidgets.QInputDialog.getText(self, _t("dlg_add_item"), _t("dlg_add_item_p"))
         if ok and text.strip():
             self._list.addItem(text.strip())
 
@@ -387,20 +519,23 @@ class ChannelDefRow(QtWidgets.QWidget):
         lbl.setStyleSheet("font-weight: bold;")
         lay.addWidget(lbl)
 
-        lay.addWidget(QtWidgets.QLabel("Source:"))
+        self._lbl_source = QtWidgets.QLabel("Source:")
+        lay.addWidget(self._lbl_source)
         self.cb_source = NoScrollComboBox()
         self.cb_source.setEditable(True)
         self.cb_source.addItems(COMMON_SOURCES)
         self.cb_source.setFixedWidth(120)
         lay.addWidget(self.cb_source)
 
-        lay.addWidget(QtWidgets.QLabel("Ch:"))
+        self._lbl_ch = QtWidgets.QLabel("Ch:")
+        lay.addWidget(self._lbl_ch)
         self.cb_ch = NoScrollComboBox()
         self.cb_ch.addItems(CHANNEL_NAMES)
         self.cb_ch.setFixedWidth(50)
         lay.addWidget(self.cb_ch)
 
-        lay.addWidget(QtWidgets.QLabel("Constant:"))
+        self._lbl_const = QtWidgets.QLabel("Constant:")
+        lay.addWidget(self._lbl_const)
         self.sp_const = NoScrollDoubleSpinBox()
         self.sp_const.setRange(-999.0, 999.0)
         self.sp_const.setDecimals(2)
@@ -412,6 +547,12 @@ class ChannelDefRow(QtWidgets.QWidget):
         self.chk_invert = QtWidgets.QCheckBox("Invert")
         lay.addWidget(self.chk_invert)
         lay.addStretch()
+
+    def retranslate(self) -> None:
+        self._lbl_source.setText(_t("ch_source"))
+        self._lbl_ch.setText(_t("ch_ch"))
+        self._lbl_const.setText(_t("ch_const"))
+        self.chk_invert.setText(_t("ch_invert"))
 
     def to_dict(self) -> dict:
         d: dict[str, Any] = {}
@@ -496,19 +637,19 @@ class OutputDefCard(QtWidgets.QGroupBox):
         lay.addLayout(row4)
 
         # 通道映射
-        ch_group = QtWidgets.QGroupBox("Channel Mapping")
-        ch_lay = QtWidgets.QVBoxLayout(ch_group)
+        self._grp_channels = QtWidgets.QGroupBox("Channel Mapping")
+        ch_lay = QtWidgets.QVBoxLayout(self._grp_channels)
         ch_lay.setSpacing(2)
         self.ch_rows: dict[str, ChannelDefRow] = {}
         for ch in CHANNEL_NAMES:
             row = ChannelDefRow(ch)
             self.ch_rows[ch] = row
             ch_lay.addWidget(row)
-        lay.addWidget(ch_group)
+        lay.addWidget(self._grp_channels)
 
         # 导入设置
-        imp_group = QtWidgets.QGroupBox("Import Settings")
-        imp_lay = QtWidgets.QVBoxLayout(imp_group)
+        self._grp_import = QtWidgets.QGroupBox("Import Settings")
+        imp_lay = QtWidgets.QVBoxLayout(self._grp_import)
         self.w_compression = LabeledCombo("Compression", COMPRESSIONS, "TC_Default", editable=True)
         imp_lay.addWidget(self.w_compression)
         self.w_lod_group = LabeledCombo("LOD Group", LOD_GROUPS, "TEXTUREGROUP_World", editable=True)
@@ -523,15 +664,15 @@ class OutputDefCard(QtWidgets.QGroupBox):
         self.w_mipgen = LabeledCombo("Mip Gen", MIP_GEN_MODES, "FromTextureGroup")
         imp_row.addWidget(self.w_mipgen)
         imp_lay.addLayout(imp_row)
-        lay.addWidget(imp_group)
+        lay.addWidget(self._grp_import)
 
         # 删除按钮
         btn_row = QtWidgets.QHBoxLayout()
         btn_row.addStretch()
-        btn_del = QtWidgets.QPushButton("Delete This Output")
-        btn_del.setProperty("danger", True)
-        btn_del.clicked.connect(lambda: self.removed.emit(self))
-        btn_row.addWidget(btn_del)
+        self._btn_del = QtWidgets.QPushButton("Delete This Output")
+        self._btn_del.setProperty("danger", True)
+        self._btn_del.clicked.connect(lambda: self.removed.emit(self))
+        btn_row.addWidget(self._btn_del)
         lay.addLayout(btn_row)
 
     # --- 序列化 ---
@@ -595,6 +736,44 @@ class OutputDefCard(QtWidgets.QGroupBox):
         name = self.w_name.value() or f"Output #{index + 1}"
         self.setTitle(f"#{index + 1}  {name}")
 
+    def retranslate(self) -> None:
+        """Update all translatable texts in this card."""
+        self.w_enabled.check.setText(_t("out_enabled"))
+        self.w_enabled.check.setToolTip(_t("out_enabled_tip"))
+        self.w_name._lbl.setText(_t("out_name"))
+        self.w_name._lbl.setToolTip(_t("out_name_tip"))
+        self.w_name.edit.setToolTip(_t("out_name_tip"))
+        self.w_suffix._lbl.setText(_t("out_suffix"))
+        self.w_suffix._lbl.setToolTip(_t("out_suffix_tip"))
+        self.w_suffix.edit.setToolTip(_t("out_suffix_tip"))
+        self.w_category._lbl.setText(_t("out_category"))
+        self.w_category._lbl.setToolTip(_t("out_category_tip"))
+        self.w_category.edit.setToolTip(_t("out_category_tip"))
+        self.w_mat_param._lbl.setText(_t("out_mat_param"))
+        self.w_mat_param._lbl.setToolTip(_t("out_mat_param_tip"))
+        self.w_mat_param.edit.setToolTip(_t("out_mat_param_tip"))
+        self.w_srgb.check.setText(_t("out_srgb"))
+        self.w_format._lbl.setText(_t("out_format"))
+        self.w_bits._lbl.setText(_t("out_bits"))
+        self.w_mips.check.setText(_t("out_mips"))
+        self.w_allow_missing.check.setText(_t("out_allow_miss"))
+        self.w_allow_missing.check.setToolTip(_t("out_allow_miss_tip"))
+        self.w_flip_green.check.setText(_t("out_flip_g"))
+        self.w_flip_green.check.setToolTip(_t("out_flip_g_tip"))
+        self.w_alpha_pre.check.setText(_t("out_alpha_pre"))
+        self.w_normal_space._lbl.setText(_t("out_normal_sp"))
+        self._grp_channels.setTitle(_t("grp_channels"))
+        self._grp_import.setTitle(_t("grp_import"))
+        self.w_compression._lbl.setText(_t("out_compress"))
+        self.w_lod_group._lbl.setText(_t("out_lod"))
+        self.w_vt.check.setText(_t("out_vt"))
+        self.w_addr_x._lbl.setText(_t("out_addr_x"))
+        self.w_addr_y._lbl.setText(_t("out_addr_y"))
+        self.w_mipgen._lbl.setText(_t("out_mipgen"))
+        self._btn_del.setText(_t("btn_del_output"))
+        for row in self.ch_rows.values():
+            row.retranslate()
+
 
 # ===========================================================================
 # 输入规则编辑（texture_input_rules.rules 表格）
@@ -608,12 +787,13 @@ class InputRulesTable(QtWidgets.QWidget):
         lay.setContentsMargins(0, 0, 0, 0)
 
         header = QtWidgets.QHBoxLayout()
-        header.addWidget(QtWidgets.QLabel("Texture Input Rules"))
+        self._hdr_lbl = QtWidgets.QLabel("Texture Input Rules")
+        header.addWidget(self._hdr_lbl)
         header.addStretch()
-        btn_add = QtWidgets.QPushButton("+ Add Rule")
-        btn_add.setProperty("secondary", True)
-        btn_add.clicked.connect(self._on_add_rule)
-        header.addWidget(btn_add)
+        self._btn_add = QtWidgets.QPushButton("+ Add Rule")
+        self._btn_add.setProperty("secondary", True)
+        self._btn_add.clicked.connect(self._on_add_rule)
+        header.addWidget(self._btn_add)
         lay.addLayout(header)
 
         self._table = QtWidgets.QTableWidget(0, 3)
@@ -624,13 +804,19 @@ class InputRulesTable(QtWidgets.QWidget):
         self._table.verticalHeader().setVisible(False)
         lay.addWidget(self._table)
 
-        btn_del = QtWidgets.QPushButton("Delete Selected Rule")
-        btn_del.setProperty("danger", True)
-        btn_del.clicked.connect(self._on_del_rule)
-        lay.addWidget(btn_del)
+        self._btn_del = QtWidgets.QPushButton("Delete Selected Rule")
+        self._btn_del.setProperty("danger", True)
+        self._btn_del.clicked.connect(self._on_del_rule)
+        lay.addWidget(self._btn_del)
+
+    def retranslate(self) -> None:
+        self._hdr_lbl.setText(_t("input_rules_hdr"))
+        self._btn_add.setText(_t("btn_add_rule"))
+        self._btn_del.setText(_t("btn_del_rule"))
+        self._table.setHorizontalHeaderLabels([_t("col_name"), _t("col_priority"), _t("col_patterns")])
 
     def _on_add_rule(self) -> None:
-        name, ok = QtWidgets.QInputDialog.getText(self, "New Rule", "Rule name (e.g. BaseColor):")
+        name, ok = QtWidgets.QInputDialog.getText(self, _t("dlg_add_rule"), _t("dlg_add_rule_p"))
         if ok and name.strip():
             row = self._table.rowCount()
             self._table.insertRow(row)
@@ -701,46 +887,55 @@ class ConfigEditorWindow(QtWidgets.QWidget):
 
         # ---- 顶部工具栏 ----
         toolbar = QtWidgets.QHBoxLayout()
-        toolbar.addWidget(QtWidgets.QLabel("Config:"))
+        self._lbl_config = QtWidgets.QLabel("Config:")
+        toolbar.addWidget(self._lbl_config)
         self._combo_file = NoScrollComboBox()
         self._combo_file.setMinimumWidth(200)
         self._combo_file.currentIndexChanged.connect(self._on_file_combo_changed)
         toolbar.addWidget(self._combo_file, 1)
 
-        btn_new = QtWidgets.QPushButton("New")
-        btn_new.setToolTip("Create a new config file")
-        btn_new.setProperty("secondary", True)
-        btn_new.clicked.connect(self._on_new_config)
-        toolbar.addWidget(btn_new)
+        self._btn_new = QtWidgets.QPushButton("New")
+        self._btn_new.setToolTip("Create a new config file")
+        self._btn_new.setProperty("secondary", True)
+        self._btn_new.clicked.connect(self._on_new_config)
+        toolbar.addWidget(self._btn_new)
 
-        btn_dup = QtWidgets.QPushButton("Duplicate")
-        btn_dup.setToolTip("Duplicate currently loaded config")
-        btn_dup.setProperty("secondary", True)
-        btn_dup.clicked.connect(self._on_duplicate_config)
-        toolbar.addWidget(btn_dup)
+        self._btn_dup = QtWidgets.QPushButton("Duplicate")
+        self._btn_dup.setToolTip("Duplicate currently loaded config")
+        self._btn_dup.setProperty("secondary", True)
+        self._btn_dup.clicked.connect(self._on_duplicate_config)
+        toolbar.addWidget(self._btn_dup)
 
-        btn_del = QtWidgets.QPushButton("Delete")
-        btn_del.setToolTip("Delete selected config file")
-        btn_del.setProperty("danger", True)
-        btn_del.clicked.connect(self._on_delete_config)
-        toolbar.addWidget(btn_del)
+        self._btn_del = QtWidgets.QPushButton("Delete")
+        self._btn_del.setToolTip("Delete selected config file")
+        self._btn_del.setProperty("danger", True)
+        self._btn_del.clicked.connect(self._on_delete_config)
+        toolbar.addWidget(self._btn_del)
 
-        btn_reload = QtWidgets.QPushButton("Reload")
-        btn_reload.setToolTip("Reload from disk")
-        btn_reload.setProperty("secondary", True)
-        btn_reload.clicked.connect(self._on_reload)
-        toolbar.addWidget(btn_reload)
+        self._btn_reload = QtWidgets.QPushButton("Reload")
+        self._btn_reload.setToolTip("Reload from disk")
+        self._btn_reload.setProperty("secondary", True)
+        self._btn_reload.clicked.connect(self._on_reload)
+        toolbar.addWidget(self._btn_reload)
 
-        btn_save = QtWidgets.QPushButton("💾 Save")
-        btn_save.setToolTip("Save to disk (Ctrl+S)")
-        btn_save.clicked.connect(self._on_save)
-        toolbar.addWidget(btn_save)
+        self._btn_save = QtWidgets.QPushButton("💾 Save")
+        self._btn_save.setToolTip("Save to disk (Ctrl+S)")
+        self._btn_save.clicked.connect(self._on_save)
+        toolbar.addWidget(self._btn_save)
 
-        btn_refresh_menu = QtWidgets.QPushButton("↻ Refresh Menu")
-        btn_refresh_menu.setToolTip("Refresh the import preset dropdown in Content Browser")
-        btn_refresh_menu.setProperty("secondary", True)
-        btn_refresh_menu.clicked.connect(self._on_refresh_import_menu)
-        toolbar.addWidget(btn_refresh_menu)
+        self._btn_refresh = QtWidgets.QPushButton("↻ Refresh Menu")
+        self._btn_refresh.setToolTip("Refresh the import preset dropdown in Content Browser")
+        self._btn_refresh.setProperty("secondary", True)
+        self._btn_refresh.clicked.connect(self._on_refresh_import_menu)
+        toolbar.addWidget(self._btn_refresh)
+
+        # 语言切换按钮
+        self._btn_lang = QtWidgets.QPushButton("中文")
+        self._btn_lang.setFixedWidth(60)
+        self._btn_lang.setProperty("secondary", True)
+        self._btn_lang.setToolTip("Switch language / 切换语言")
+        self._btn_lang.clicked.connect(self._on_switch_lang)
+        toolbar.addWidget(self._btn_lang)
 
         root.addLayout(toolbar)
 
@@ -780,6 +975,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         lay.setSpacing(6)
 
         g1 = QtWidgets.QGroupBox("Paths && Policies")
+        self._grp_paths = g1
         g1l = QtWidgets.QVBoxLayout(g1)
         self.w_master_mat = LabeledLine(
             "Master Material", "", "母材质 UE 路径（空 = 不创建材质实例）")
@@ -798,6 +994,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         lay.addWidget(g1)
 
         g2 = QtWidgets.QGroupBox("Asset Naming Templates")
+        self._grp_naming = g2
         g2l = QtWidgets.QVBoxLayout(g2)
         self.w_nm_sm = LabeledLine("Static Mesh", "SM_{Name}", "静态网格命名模板")
         g2l.addWidget(self.w_nm_sm)
@@ -820,6 +1017,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         lay.setSpacing(6)
 
         g = QtWidgets.QGroupBox("Match Settings")
+        self._grp_match = g
         gl = QtWidgets.QVBoxLayout(g)
         self.w_match_mode = LabeledCombo("Match Mode", MATCH_MODES, "glob")
         gl.addWidget(self.w_match_mode)
@@ -851,10 +1049,10 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         lay.setSpacing(4)
 
         btn_row = QtWidgets.QHBoxLayout()
-        btn_add = QtWidgets.QPushButton("+ Add Output")
-        btn_add.setProperty("secondary", True)
-        btn_add.clicked.connect(self._on_add_output)
-        btn_row.addWidget(btn_add)
+        self._btn_add_output = QtWidgets.QPushButton("+ Add Output")
+        self._btn_add_output.setProperty("secondary", True)
+        self._btn_add_output.clicked.connect(self._on_add_output)
+        btn_row.addWidget(self._btn_add_output)
         btn_row.addStretch()
         lay.addLayout(btn_row)
 
@@ -891,13 +1089,13 @@ class ConfigEditorWindow(QtWidgets.QWidget):
 
     def _on_new_config(self) -> None:
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "New Config", "Config name (without extension):")
+            self, _t("dlg_new"), _t("dlg_new_p"))
         if not ok or not name.strip():
             return
         name = name.strip()
         path = os.path.join(self._config_dir, f"{name}.jsonc")
         if os.path.exists(path):
-            QtWidgets.QMessageBox.warning(self, "Exists", f"{name}.jsonc already exists.")
+            QtWidgets.QMessageBox.warning(self, _t("dlg_exists"), _t("dlg_exists_p", n=f"{name}.jsonc"))
             return
         default_data: dict[str, Any] = {
             "config_version": "1.1",
@@ -925,7 +1123,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         idx = self._combo_file.findText(f"{name}.jsonc")
         if idx >= 0:
             self._combo_file.setCurrentIndex(idx)
-        self._statusbar.setText(f"Created: {name}.jsonc")
+        self._statusbar.setText(_t("st_created", n=f"{name}.jsonc"))
         self._on_refresh_import_menu()
 
     def _on_duplicate_config(self) -> None:
@@ -933,13 +1131,13 @@ class ConfigEditorWindow(QtWidgets.QWidget):
             return
         base = os.path.splitext(os.path.basename(self._current_file))[0]
         name, ok = QtWidgets.QInputDialog.getText(
-            self, "Duplicate", "New config name:", text=f"{base}_copy")
+            self, _t("dlg_dup"), _t("dlg_dup_p"), text=f"{base}_copy")
         if not ok or not name.strip():
             return
         name = name.strip()
         dest = os.path.join(self._config_dir, f"{name}.jsonc")
         if os.path.exists(dest):
-            QtWidgets.QMessageBox.warning(self, "Exists", f"{name}.jsonc already exists.")
+            QtWidgets.QMessageBox.warning(self, _t("dlg_exists"), _t("dlg_exists_p", n=f"{name}.jsonc"))
             return
         data = self._collect_data()
         _save_jsonc(dest, data)
@@ -947,7 +1145,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         idx = self._combo_file.findText(f"{name}.jsonc")
         if idx >= 0:
             self._combo_file.setCurrentIndex(idx)
-        self._statusbar.setText(f"Duplicated to: {name}.jsonc")
+        self._statusbar.setText(_t("st_duplicated", n=f"{name}.jsonc"))
         self._on_refresh_import_menu()
 
     def _on_delete_config(self) -> None:
@@ -955,8 +1153,8 @@ class ConfigEditorWindow(QtWidgets.QWidget):
             return
         fn = os.path.basename(self._current_file)
         reply = QtWidgets.QMessageBox.warning(
-            self, "Delete Config",
-            f"Permanently delete {fn}?",
+            self, _t("dlg_del"),
+            _t("dlg_del_p", n=fn),
             QtWidgets.QMessageBox.StandardButton.Yes | QtWidgets.QMessageBox.StandardButton.No,
         )
         if reply != QtWidgets.QMessageBox.StandardButton.Yes:
@@ -964,11 +1162,11 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         try:
             os.remove(self._current_file)
         except Exception as ex:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Delete failed:\n{ex}")
+            QtWidgets.QMessageBox.critical(self, _t("dlg_error"), _t("dlg_del_fail", e=ex))
             return
         self._current_file = ""
         self._refresh_file_combo()
-        self._statusbar.setText(f"Deleted: {fn}")
+        self._statusbar.setText(_t("st_deleted", n=fn))
         self._on_refresh_import_menu()
 
     def _on_reload(self) -> None:
@@ -977,15 +1175,15 @@ class ConfigEditorWindow(QtWidgets.QWidget):
 
     def _on_save(self) -> None:
         if not self._current_file:
-            self._statusbar.setText("No file to save")
+            self._statusbar.setText(_t("st_no_file"))
             return
         data = self._collect_data()
         try:
             _save_jsonc(self._current_file, data)
         except Exception as ex:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Save failed:\n{ex}")
+            QtWidgets.QMessageBox.critical(self, _t("dlg_error"), _t("dlg_save_fail", e=ex))
             return
-        self._statusbar.setText(f"Saved: {os.path.basename(self._current_file)}")
+        self._statusbar.setText(_t("st_saved", n=os.path.basename(self._current_file)))
         self._on_refresh_import_menu()
 
     # ------------------------------------------------------------------
@@ -995,7 +1193,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         try:
             data = _load_jsonc(path)
         except Exception as ex:
-            QtWidgets.QMessageBox.critical(self, "Error", f"Failed to load:\n{ex}")
+            QtWidgets.QMessageBox.critical(self, _t("dlg_error"), _t("dlg_load_fail", e=ex))
             return
 
         self._loading = True
@@ -1030,7 +1228,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self._renumber_output_cards()
 
         self._loading = False
-        self._statusbar.setText(f"Loaded: {os.path.basename(path)}")
+        self._statusbar.setText(_t("st_loaded", n=os.path.basename(path)))
 
     def _collect_data(self) -> dict:
         """从表单控件收集完整配置 dict。"""
@@ -1088,6 +1286,73 @@ class ConfigEditorWindow(QtWidgets.QWidget):
     def _renumber_output_cards(self) -> None:
         for i, card in enumerate(self._output_cards):
             card.update_title(i)
+
+    # ------------------------------------------------------------------
+    # Language switching
+    # ------------------------------------------------------------------
+    def _on_switch_lang(self) -> None:
+        global _LANG
+        _LANG = "zh" if _LANG == "en" else "en"
+        self._retranslate()
+
+    def _retranslate(self) -> None:
+        """Refresh all translatable UI texts to the current language."""
+        self.setWindowTitle(_t("window_title"))
+        # Toolbar
+        self._lbl_config.setText(_t("config_label"))
+        self._btn_new.setText(_t("btn_new"))
+        self._btn_new.setToolTip(_t("btn_new_tip"))
+        self._btn_dup.setText(_t("btn_dup"))
+        self._btn_dup.setToolTip(_t("btn_dup_tip"))
+        self._btn_del.setText(_t("btn_del"))
+        self._btn_del.setToolTip(_t("btn_del_tip"))
+        self._btn_reload.setText(_t("btn_reload"))
+        self._btn_reload.setToolTip(_t("btn_reload_tip"))
+        self._btn_save.setText(_t("btn_save"))
+        self._btn_save.setToolTip(_t("btn_save_tip"))
+        self._btn_refresh.setText(_t("btn_refresh"))
+        self._btn_refresh.setToolTip(_t("btn_refresh_tip"))
+        # Lang button shows the OTHER language name
+        self._btn_lang.setText("English" if _LANG == "zh" else "中文")
+        # Tabs
+        self._tabs.setTabText(0, _t("tab_general"))
+        self._tabs.setTabText(1, _t("tab_input"))
+        self._tabs.setTabText(2, _t("tab_output"))
+        # General tab
+        self._grp_paths.setTitle(_t("grp_paths"))
+        self.w_master_mat._lbl.setText(_t("master_mat"))
+        self.w_master_mat._lbl.setToolTip(_t("master_mat_tip"))
+        self.w_master_mat.edit.setToolTip(_t("master_mat_tip"))
+        self.w_fallback_path._lbl.setText(_t("fallback_path"))
+        self.w_fallback_path._lbl.setToolTip(_t("fallback_path_tip"))
+        self.w_fallback_path.edit.setToolTip(_t("fallback_path_tip"))
+        self.w_target_tpl._lbl.setText(_t("target_tpl"))
+        self.w_target_tpl._lbl.setToolTip(_t("target_tpl_tip"))
+        self.w_target_tpl.edit.setToolTip(_t("target_tpl_tip"))
+        self.w_conflict._lbl.setText(_t("conflict"))
+        self.w_conflict._lbl.setToolTip(_t("conflict_tip"))
+        self._grp_naming.setTitle(_t("grp_naming"))
+        self.w_nm_sm._lbl.setText(_t("nm_sm"))
+        self.w_nm_sm._lbl.setToolTip(_t("nm_sm_tip"))
+        self.w_nm_mi._lbl.setText(_t("nm_mi"))
+        self.w_nm_mi._lbl.setToolTip(_t("nm_mi_tip"))
+        self.w_nm_tex._lbl.setText(_t("nm_tex"))
+        self.w_nm_tex._lbl.setToolTip(_t("nm_tex_tip"))
+        # Input rules tab
+        self._grp_match.setTitle(_t("grp_match"))
+        self.w_match_mode._lbl.setText(_t("match_mode"))
+        self.w_ignore_case.check.setText(_t("ignore_case"))
+        self.w_extensions._title_lbl.setText(_t("extensions"))
+        self.w_extensions._title_lbl.setToolTip(_t("extensions_tip"))
+        self.w_search_roots._title_lbl.setText(_t("search_roots"))
+        self.w_search_roots._title_lbl.setToolTip(_t("search_roots_tip"))
+        self._input_rules_table.retranslate()
+        # Output tab
+        self._btn_add_output.setText(_t("btn_add_output"))
+        for card in self._output_cards:
+            card.retranslate()
+        # Status bar
+        self._statusbar.setText(_t("st_ready"))
 
     # ------------------------------------------------------------------
     # Refresh import menu (ToolMenus)
