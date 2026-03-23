@@ -1,11 +1,12 @@
 <#
 .SYNOPSIS
-    AssetCustoms dependency installer - deploys Python packages to Content/Python/.
+    AssetCustoms dependency installer - deploys Python packages to Content/Python/vendor_libs/.
 
 .DESCRIPTION
     UE automatically adds plugin Content/Python/ to sys.path on startup.
-    This script installs third-party packages (e.g. PIL/) directly into
-    Content/Python/ so UE Python can import them without any path hacks.
+    This script installs third-party packages into Content/Python/vendor_libs/
+    to keep them separate from business code. init_unreal.py injects vendor_libs/
+    into sys.path at startup.
 
     Strategy:
     1. Prefer offline install from vendor/ (fast, no network required)
@@ -39,7 +40,7 @@ $ErrorActionPreference = "Stop"
 # ============================================================
 $pluginRoot  = (Resolve-Path $PSScriptRoot).Path
 $contentPy   = Join-Path $pluginRoot "Content\Python"
-$targetDir   = $contentPy   # packages go directly into Content/Python/
+$targetDir   = Join-Path $contentPy "vendor_libs"  # third-party packages isolated here
 $vendorDir   = Join-Path $pluginRoot "vendor"
 $reqFile     = Join-Path $pluginRoot "requirements.txt"
 
@@ -96,25 +97,29 @@ try {
 # ============================================================
 # Clean (optional)
 # ============================================================
-# Track managed package directories for clean operation
-$managedPackages = @(
-    "PIL", "pillow-*.dist-info",
-    "PySide6", "PySide6_Essentials*.dist-info",
-    "shiboken6", "shiboken6*.dist-info",
-    "psd_tools", "psd_tools-*.dist-info",
-    "attrs", "attrs-*.dist-info",
-    "typing_extensions*",
-    "numpy", "numpy-*.dist-info", "numpy.libs"
-)
-
 if ($Clean) {
     Write-Host ""
     Write-Host "Cleaning installed packages..." -ForegroundColor Yellow
-    foreach ($pattern in $managedPackages) {
-        $matches = Get-ChildItem -Path $targetDir -Filter $pattern -Directory -ErrorAction SilentlyContinue
-        foreach ($m in $matches) {
-            Remove-Item -Recurse -Force $m.FullName
-            Write-Host "  Removed: $($m.Name)"
+    if (Test-Path $targetDir) {
+        Remove-Item -Recurse -Force $targetDir
+        Write-Host "  Removed: vendor_libs/"
+    }
+    # Also clean legacy packages that were installed directly into Content/Python/
+    $legacyPackages = @(
+        "PIL", "pillow-*.dist-info",
+        "PySide6", "PySide6_Essentials*.dist-info",
+        "shiboken6", "shiboken6*.dist-info",
+        "psd_tools", "psd_tools-*.dist-info", "psd_tools.libs",
+        "attrs", "attr", "attrs-*.dist-info",
+        "typing_extensions*",
+        "numpy", "numpy-*.dist-info", "numpy.libs",
+        "bin"
+    )
+    foreach ($pattern in $legacyPackages) {
+        $items = Get-ChildItem -Path $contentPy -Filter $pattern -ErrorAction SilentlyContinue
+        foreach ($item in $items) {
+            Remove-Item -Recurse -Force $item.FullName
+            Write-Host "  Removed legacy: $($item.Name)"
         }
     }
     # Also clean legacy Lib/site-packages if present

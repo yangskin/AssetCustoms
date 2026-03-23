@@ -1,16 +1,24 @@
 """AssetCustoms 插件入口脚本。
 
 职责：
-1. 定义运行时 CONFIG
-2. 导入 UI 注册器和 Actions
-3. 自动注册 Content Browser 工具栏下拉菜单
+1. 将 vendor_libs/ 注入 sys.path（第三方依赖统一存放处）
+2. 定义运行时 CONFIG
+3. 导入 UI 注册器和 Actions
+4. 自动注册 Content Browser 工具栏下拉菜单
 
-第三方依赖（如 PIL）由 deploy.ps1 直接安装到 Content/Python/，
-UE 启动时自动将该目录加入 sys.path，无需额外路径注入。
+第三方依赖（如 PIL）由 deploy.ps1 安装到 Content/Python/vendor_libs/，
+本脚本在最早期将该子目录加入 sys.path，保证后续 import 能找到依赖。
 
 业务逻辑见 unreal_integration/actions.py
 UI 注册逻辑见 unreal_integration/ui.py
 """
+import sys as _sys
+import os as _os
+
+_vendor_libs = _os.path.join(_os.path.dirname(__file__), "vendor_libs")
+if _os.path.isdir(_vendor_libs) and _vendor_libs not in _sys.path:
+    _sys.path.insert(0, _vendor_libs)
+
 import unreal
 
 from unreal_integration.ui import AssetCustomsUI
