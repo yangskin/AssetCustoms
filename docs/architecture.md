@@ -5,8 +5,9 @@
 > 实现状态（2026-03-23）
 > - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR4 分诊 UI ✅（PySide6 TriageWindow + TriageDecision + 8 项单测 + 视觉验证）；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
 > - 已完成：M3 质量与体验 ✅（NFR1 性能预算 + NFR3 健壮性 + NFR4 无配置 UI 禁用）；M4 批处理 ✅；Config Editor GUI（Round 1-5，含多语言支持）。
+> - 已完成：M6 Send to Photoshop ✅（Content Browser 右键 → Send → Send to Photoshop，PSD 导出/监控/自动回写）。
 > - 健壮性审计（2026-03-23）：修复 7 项问题（tick 定时器、内存泄漏、静默异常、输入校验等），详见「健壮性与稳定性审计」章节。
-> - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
+> - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 + psd-tools 1.14.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
 
 ## 作用域与边界
 - 边界：仅覆盖 UE Python 脚本与其交互的最小外部接口（Editor、AssetTools、EUL、材质系统、文件对话框）。
@@ -33,6 +34,14 @@
   - 资产重命名与移动：根据 target_path_template、asset_naming_template、conflict_policy 实施；按 asset_subdirectories 将 SM/MI/贴图分别放入对应子目录。
   - 材质实例创建与链接：父材质=default_master_material_path，参数按定义自动绑定。
   - 资产链接与清理：SM 绑定 MI；清理隔离区；应用导入设置（压缩、LOD 组、sRGB、VT 等）。
+
+## 模块 F：外部编辑器桥接（Send to Photoshop）
+- `unreal_integration/photoshop_bridge.py`：PhotoshopBridge + TextureMonitor + TickTimer
+- 功能：Content Browser 右键 → Send → Send to Photoshop
+- 流程：导出 Texture2D → TGA → PSD（psd-tools）→ 启动 Photoshop → TextureMonitor 轮询文件变化 → 自动重新导入 → PS 关闭后清理临时文件
+- 依赖：Pillow（TGA→Image 转换）、psd-tools（PSD 格式读写）
+- 注册：`ui.py._register_asset_context_menu()` 在 `ContentBrowser.AssetContextMenu` 添加 Send 子菜单
+- 入口：`actions.py.on_send_to_photoshop()` → 懒加载 PhotoshopBridge 单例
 
 ## 数据流（时序）
 1) UE 加载插件 -> `init_unreal.py` 注册 UI 与加载 Profile 列表。
@@ -76,7 +85,11 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   ├─ vendor/                       # 离线 wheel 包（不提交安装产物，仅 .whl）
   │   ├─ pillow-*.whl
   │   ├─ pyside6_essentials-*.whl
-  │   └─ shiboken6-*.whl
+  │   ├─ shiboken6-*.whl
+  │   ├─ psd_tools-*.whl
+  │   ├─ attrs-*.whl
+  │   ├─ typing_extensions-*.whl
+  │   └─ numpy-*.whl
   ├─ deploy.ps1                    # 依赖安装脚本（离线优先 → PyPI 回退）
   ├─ requirements.txt              # 运行时依赖声明
   ├─ docs/                         # 项目文档

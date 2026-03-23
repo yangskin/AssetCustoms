@@ -268,10 +268,45 @@ class AssetCustomsUI:
         else:
             unreal.log_error(f"[AssetCustoms] Action '{method_name}' not found or not callable")
 
+    def _register_asset_context_menu(self) -> None:
+        """在 Content Browser 资产右键菜单注册 'Send' 子菜单。"""
+        asset_menu_path = self.cfg.get("asset_menu_path") or "ContentBrowser.AssetContextMenu"
+        menu = self.menus.find_menu(asset_menu_path)
+        if not menu:
+            menu = self.menus.extend_menu(asset_menu_path)
+
+        section = self.cfg.get("section") or "AssetCustoms"
+        send_menu_name = f"{section}.Send"
+
+        try:
+            send_menu = menu.add_sub_menu(
+                menu.get_name(), "GetAssetActions", send_menu_name, "Send", ""
+            )
+        except Exception:
+            send_menu = self.menus.extend_menu(send_menu_name)
+
+        if not send_menu:
+            return
+
+        ps_cmd = self._build_python_command("on_send_to_photoshop")
+        ps_entry = self.make_py_entry(
+            entry_name=f"{section}.SendToPhotoshop",
+            label="Send to Photoshop",
+            tooltip="在 Photoshop 中打开选中的贴图",
+            python=ps_cmd,
+            is_toolbar=False,
+            icon={"style_set": "EditorStyle", "style_name": "ContentBrowser.AssetActions"},
+        )
+        try:
+            send_menu.add_menu_entry("Send", ps_entry)
+        except Exception:
+            pass
+
     def register_all(self) -> None:
         """一次性注册并刷新 UI。"""
         if self.cfg.get("dropdown_from_configs", False):
             self._register_toolbar_dropdown_from_configs()
+        self._register_asset_context_menu()
         for _key, e in (self.cfg.get("entries") or {}).items():
             self.register_entry(e)
         self.menus.refresh_all_widgets()

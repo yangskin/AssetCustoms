@@ -33,6 +33,17 @@ Content/Python/PySide6/
 Content/Python/PySide6_Essentials*.dist-info/
 Content/Python/shiboken6/
 Content/Python/shiboken6*.dist-info/
+Content/Python/psd_tools/
+Content/Python/psd_tools*.dist-info/
+Content/Python/attrs/
+Content/Python/attrs*.dist-info/
+Content/Python/typing_extensions*/
+Content/Python/numpy/
+Content/Python/numpy-*.dist-info/
+Content/Python/numpy.libs/
+Content/Python/psd_tools.libs
+Content/Python/attr
+Content/Python/bin
 
 # Misc
 *.tmp

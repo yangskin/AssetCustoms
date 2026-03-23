@@ -1,6 +1,6 @@
 # AssetCustoms — UE5 资产自动化插件
 
-> 版本: V1.1（Config v2.0） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
+> 版本: V1.2（Send to Photoshop） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
 
 AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。
 
@@ -135,6 +135,7 @@ print(QtCore.qVersion())
 | Pillow | ≥ 10.0.0 | 贴图通道编排、格式转换 |
 | PySide6-Essentials | ≥ 6.5.0 | 分诊 UI、Config Editor 等 Qt 界面 |
 | shiboken6 | ≥ 6.5.0 | PySide6 C++ 绑定运行时 |
+| psd-tools | ≥ 1.9.0 | PSD 文件读写（Send to Photoshop 功能） |
 
 > 离线 wheel 已内置在 `vendor/` 目录，`deploy.bat` 默认优先使用。
 
@@ -157,6 +158,7 @@ print(QtCore.qVersion())
 | Config Editor | 三页签 GUI 配置编辑器（Input/Processing/Output） | ✅ |
 | 健壮性审计 | 7 项问题修复（内存泄漏、静默异常等） | ✅ |
 | **M5** Config v2.0 | 三段式管线模型（Input→Processing→Output） | ✅ |
+| **M6** Send to Photoshop | Content Browser 右键发送贴图到 PS，自动监控回写 | ✅ |
 
 详见 [`docs/roadmap.md`](docs/roadmap.md)。
 
@@ -236,7 +238,11 @@ AssetCustoms/
 ├── vendor/                     # 离线 wheel 包（随插件分发）
 │   ├── pillow-*.whl
 │   ├── pyside6_essentials-*.whl
-│   └── shiboken6-*.whl
+│   ├── shiboken6-*.whl
+│   ├── psd_tools-*.whl
+│   ├── attrs-*.whl
+│   ├── typing_extensions-*.whl
+│   └── numpy-*.whl
 ├── docs/                       # 项目文档
 │   ├── architecture.md         # 系统架构 / 模块边界 / 数据流
 │   ├── requirements_v1.1.md    # 需求规格
@@ -329,7 +335,7 @@ deploy.bat -Online
 ```batch
 deploy.bat -Clean
 ```
-此命令会先清理已安装的 PIL、PySide6、shiboken6 目录，再重新安装。
+此命令会先清理已安装的 PIL、PySide6、shiboken6、psd_tools、numpy 等目录，再重新安装。
 
 ### Q: UE 编辑器中看不到 AssetCustoms 菜单？
 
@@ -337,6 +343,16 @@ deploy.bat -Clean
 2. 确认 `deploy.bat` 已成功运行（窗口显示 "Installation complete!"）
 3. 检查 UE Output Log 中 `LogPython` 的错误信息
 4. 编辑器 → Edit → Plugins → 搜索 "AssetCustoms" 确认已启用
+
+### Q: 如何使用 Send to Photoshop？
+
+1. 在 Content Browser 中选中一个或多个 Texture2D 资产
+2. 右键 → **Send** → **Send to Photoshop**
+3. 插件会自动导出贴图为 PSD，启动 Photoshop 打开
+4. 在 Photoshop 中编辑并保存后，贴图会自动重新导入到 UE（保留压缩、sRGB、LOD 设置）
+5. 关闭 Photoshop 后临时文件自动清理
+
+> 需要系统已安装 Adobe Photoshop（自动搜索 `C:\Program Files\Adobe\` 路径）。
 
 ---
 

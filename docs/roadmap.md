@@ -132,6 +132,23 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - [x] Step 4：Config Editor UI 重构（3 Tab：Input / Processing / Output，含双语支持）
 - [x] Step 5：测试 & 回归（90 tests: 70 passed, 20 skipped + E2E 验证通过）
 
+## M6 — Send to Photoshop ✅（已完成 2026-03-23）
+
+**目标**：从 Content Browser 右键将 Texture2D 发送到 Photoshop 编辑，保存后自动回写 UE。
+
+**实现**：
+- [x] `unreal_integration/photoshop_bridge.py`：PhotoshopBridge 主类 + TickTimer/TextureMonitor 文件监控
+- [x] `ui.py`：`_register_asset_context_menu()` 在 `ContentBrowser.AssetContextMenu` 注册 Send > Send to Photoshop
+- [x] `actions.py`：`on_send_to_photoshop()` 懒加载 PhotoshopBridge 单例
+- [x] 入口 `init_unreal.py` 未修改，注册通过 `register_all()` 自动完成
+- [x] 新增依赖：psd-tools（离线 wheel + deploy.ps1 更新）
+
+**功能流程**：
+1. 选中 Texture2D → 右键 → Send → Send to Photoshop
+2. 导出为 TGA → 转换为 PSD → 启动 Photoshop 打开
+3. TextureMonitor（1s 轮询）检测 PSD 修改 → 自动重新导入（保留 sRGB/压缩/LOD 设置）
+4. Photoshop 关闭后自动清理临时文件（TGA + PSD）
+
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。
 - 文件名/贴图规则存在多样性：必须优先“智能预填充”，回退到规则匹配与分诊 UI。

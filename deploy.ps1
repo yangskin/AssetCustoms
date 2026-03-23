@@ -100,7 +100,11 @@ try {
 $managedPackages = @(
     "PIL", "pillow-*.dist-info",
     "PySide6", "PySide6_Essentials*.dist-info",
-    "shiboken6", "shiboken6*.dist-info"
+    "shiboken6", "shiboken6*.dist-info",
+    "psd_tools", "psd_tools-*.dist-info",
+    "attrs", "attrs-*.dist-info",
+    "typing_extensions*",
+    "numpy", "numpy-*.dist-info", "numpy.libs"
 )
 
 if ($Clean) {
@@ -216,6 +220,12 @@ try:
 except ImportError as e:
     print(f'PySide6 FAILED: {e}')
     ok = False
+try:
+    from psd_tools import PSDImage
+    print(f'psd-tools OK: version={PSDImage.__module__}')
+except ImportError as e:
+    print(f'psd-tools FAILED: {e}')
+    ok = False
 sys.exit(0 if ok else 1)
 "@
 
@@ -241,4 +251,5 @@ Write-Host "  Next steps:" -ForegroundColor Cyan
 Write-Host "    1. Restart Unreal Editor to load new packages"
 Write-Host "    2. In UE Python console: from PIL import Image"
 Write-Host "    3. In UE Python console: from PySide6 import QtWidgets"
+Write-Host "    4. In UE Python console: from psd_tools import PSDImage"
 Write-Host ""

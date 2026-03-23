@@ -274,6 +274,15 @@ class AssetCustomsActions:
             unreal.log_error(f"[AssetCustoms] 分诊 UI 打开失败: {ex}")
             unreal.log_warning(f"[AssetCustoms] 资产保留在隔离区: {pipeline_result.isolation_path}")
 
+    # ---- Send to Photoshop ----
+    def on_send_to_photoshop(self) -> None:
+        """发送选中的贴图到 Photoshop。"""
+        from unreal_integration.photoshop_bridge import PhotoshopBridge
+
+        if not hasattr(self, "_ps_bridge"):
+            self._ps_bridge = PhotoshopBridge()
+        self._ps_bridge.open_selected()
+
     # ---- 配置编辑器 ----
     def on_open_config_editor(self) -> None:
         """打开 JSONC 配置编辑器窗口。"""

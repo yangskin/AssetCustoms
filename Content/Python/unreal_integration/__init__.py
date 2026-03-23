@@ -11,6 +11,7 @@ from .import_pipeline import (
 	UnrealAssetOps,
 	run_import_pipeline,
 )
+from .photoshop_bridge import PhotoshopBridge
 
 __all__ = [
 	"merge_textures_in_unreal",
@@ -22,4 +23,5 @@ __all__ = [
 	"ImportPipelineResult",
 	"UnrealAssetOps",
 	"run_import_pipeline",
+	"PhotoshopBridge",
 ]
