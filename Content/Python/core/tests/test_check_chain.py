@@ -4,10 +4,14 @@ import pytest
 
 from core.config.schema import (
     ChannelDef,
+    InputConfig,
     PluginConfig,
+    ProcessingConfig,
+    TextureInputConfig,
     TextureInputRule,
-    TextureInputRules,
-    TextureOutputDef,
+    TextureProcessingDef,
+    OutputConfig,
+    MaterialOutputConfig,
 )
 from core.pipeline.check_chain import (
     CheckResult,
@@ -73,47 +77,51 @@ class TestCheckMasterMaterial:
 
 def _make_config_for_mapping(allow_missing_mro: bool = True) -> PluginConfig:
     return PluginConfig(
-        texture_input_rules=TextureInputRules(
-            match_mode="glob",
-            ignore_case=True,
-            rules={
-                "BaseColor": TextureInputRule(priority=10, patterns=["*_BC.*"]),
-                "Normal": TextureInputRule(priority=10, patterns=["*_N.*"]),
-                "Roughness": TextureInputRule(priority=9, patterns=["*_R.*"]),
-                "Metallic": TextureInputRule(priority=9, patterns=["*_M.*"]),
-                "AmbientOcclusion": TextureInputRule(priority=8, patterns=["*_AO.*"]),
-            },
+        input=InputConfig(
+            texture=TextureInputConfig(
+                match_mode="glob",
+                ignore_case=True,
+                rules={
+                    "BaseColor": TextureInputRule(priority=10, patterns=["*_BC.*"]),
+                    "Normal": TextureInputRule(priority=10, patterns=["*_N.*"]),
+                    "Roughness": TextureInputRule(priority=9, patterns=["*_R.*"]),
+                    "Metallic": TextureInputRule(priority=9, patterns=["*_M.*"]),
+                    "AmbientOcclusion": TextureInputRule(priority=8, patterns=["*_AO.*"]),
+                },
+            ),
         ),
-        texture_output_definitions=[
-            TextureOutputDef(
-                enabled=True, output_name="Diffuse", suffix="D",
-                channels={
-                    "R": ChannelDef(source="BaseColor", ch="R"),
-                    "G": ChannelDef(source="BaseColor", ch="G"),
-                    "B": ChannelDef(source="BaseColor", ch="B"),
-                    "A": ChannelDef(constant=1.0),
-                },
-            ),
-            TextureOutputDef(
-                enabled=True, output_name="Normal", suffix="N",
-                channels={
-                    "R": ChannelDef(source="Normal", ch="R"),
-                    "G": ChannelDef(source="Normal", ch="G"),
-                    "B": ChannelDef(source="Normal", ch="B"),
-                    "A": ChannelDef(constant=1.0),
-                },
-            ),
-            TextureOutputDef(
-                enabled=True, output_name="Packed_MRO", suffix="MRO",
-                allow_missing=allow_missing_mro,
-                channels={
-                    "R": ChannelDef(source="Metallic", ch="R", constant=0.0),
-                    "G": ChannelDef(source="Roughness", ch="R", constant=0.5),
-                    "B": ChannelDef(source="AmbientOcclusion", ch="R", constant=1.0),
-                    "A": ChannelDef(constant=1.0),
-                },
-            ),
-        ],
+        processing=ProcessingConfig(
+            texture_definitions=[
+                TextureProcessingDef(
+                    enabled=True, name="Diffuse", suffix="D",
+                    channels={
+                        "R": ChannelDef(source="BaseColor", ch="R"),
+                        "G": ChannelDef(source="BaseColor", ch="G"),
+                        "B": ChannelDef(source="BaseColor", ch="B"),
+                        "A": ChannelDef(constant=1.0),
+                    },
+                ),
+                TextureProcessingDef(
+                    enabled=True, name="Normal", suffix="N",
+                    channels={
+                        "R": ChannelDef(source="Normal", ch="R"),
+                        "G": ChannelDef(source="Normal", ch="G"),
+                        "B": ChannelDef(source="Normal", ch="B"),
+                        "A": ChannelDef(constant=1.0),
+                    },
+                ),
+                TextureProcessingDef(
+                    enabled=True, name="Packed_MRO", suffix="MRO",
+                    allow_missing=allow_missing_mro,
+                    channels={
+                        "R": ChannelDef(source="Metallic", ch="R", constant=0.0),
+                        "G": ChannelDef(source="Roughness", ch="R", constant=0.5),
+                        "B": ChannelDef(source="AmbientOcclusion", ch="R", constant=1.0),
+                        "A": ChannelDef(constant=1.0),
+                    },
+                ),
+            ],
+        ),
     )
 
 
@@ -176,7 +184,7 @@ class TestRunCheckChain:
             str(tmp_path / "Rock_N.png"),
         ]
         cfg = _make_config_for_mapping()
-        cfg.default_master_material_path = "/Game/M_Master"
+        cfg.output.material.master_material_path = "/Game/M_Master"
         result = run_check_chain(
             asset_names=assets,
             texture_files=files,
@@ -200,7 +208,7 @@ class TestRunCheckChain:
     def test_missing_material_fails(self, tmp_path):
         files = [str(tmp_path / "Rock_BC.png"), str(tmp_path / "Rock_N.png")]
         cfg = _make_config_for_mapping()
-        cfg.default_master_material_path = "/Game/M_Missing"
+        cfg.output.material.master_material_path = "/Game/M_Missing"
         result = run_check_chain(
             asset_names=["SM_Rock"],
             texture_files=files,
@@ -213,7 +221,7 @@ class TestRunCheckChain:
     def test_empty_material_path_skips(self, tmp_path):
         files = [str(tmp_path / "Rock_BC.png"), str(tmp_path / "Rock_N.png")]
         cfg = _make_config_for_mapping()
-        cfg.default_master_material_path = ""
+        cfg.output.material.master_material_path = ""
         result = run_check_chain(
             asset_names=["SM_Rock"],
             texture_files=files,

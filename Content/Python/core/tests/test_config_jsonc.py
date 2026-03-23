@@ -9,21 +9,28 @@ if PYTHON_ROOT not in sys.path:
     sys.path.insert(0, PYTHON_ROOT)
 
 from core.config.loader import load_config
-from core.textures.layer_merge import BlendMode
 
 
 def test_load_jsonc_with_comments_and_trailing_commas():
     jsonc_text = (
         '{\n'
         '  // comment line\n'
-        '  "texture_merge": {\n'
-        '    "mode": "overlay", // inline comment\n'
-        '    "opacity": 0.6,\n'
+        '  "config_version": "2.0",\n'
+        '  "processing": {\n'
+        '    "conflict_policy": "version", // inline comment\n'
+        '    "texture_definitions": [\n'
+        '      {\n'
+        '        "name": "Diffuse",\n'
+        '        "suffix": "D",\n'
+        '        "channels": {\n'
+        '          "R": { "from": "BaseColor", "ch": "R" },\n'
+        '        },\n'
+        '      },\n'
+        '    ],\n'
         '  },\n'
-        '  "allowed_modes": [\n'
-        '    "normal",\n'
-        '    "overlay", // trailing comma below\n'
-        '  ],\n'
+        '  "output": {\n'
+        '    "target_path_template": "/Game/{Category}/{Name}",\n'
+        '  },\n'
         '  /* block comment */\n'
         '}\n'
     )
@@ -33,10 +40,11 @@ def test_load_jsonc_with_comments_and_trailing_commas():
         path = tf.name
     try:
         cfg = load_config(path)
-        assert cfg.texture_merge.mode == BlendMode.OVERLAY
-        assert abs(cfg.texture_merge.opacity - 0.6) < 1e-6
-        assert BlendMode.NORMAL in cfg.allowed_modes
-        assert BlendMode.OVERLAY in cfg.allowed_modes
+        assert cfg.config_version == "2.0"
+        assert cfg.processing.conflict_policy == "version"
+        assert len(cfg.processing.texture_definitions) == 1
+        assert cfg.processing.texture_definitions[0].name == "Diffuse"
+        assert cfg.output.target_path_template == "/Game/{Category}/{Name}"
     finally:
         try:
             os.remove(path)

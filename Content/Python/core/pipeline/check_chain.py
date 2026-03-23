@@ -120,16 +120,16 @@ def check_texture_mapping(
     Returns:
         (match_result, failure) — match_result 始终返回，failure 为 None 表示通过。
     """
-    match_result = match_textures(texture_files, config.texture_input_rules)
+    match_result = match_textures(texture_files, config.input.texture)
 
     # 检查每个 enabled 的输出定义所需的逻辑位是否已映射
     missing_slots: List[str] = []
-    for output_def in config.texture_output_definitions:
-        if not output_def.enabled:
+    for proc_def in config.processing.texture_definitions:
+        if not proc_def.enabled:
             continue
         # 收集此输出需要的逻辑源
         needed_sources = set()
-        for ch_def in output_def.channels.values():
+        for ch_def in proc_def.channels.values():
             if ch_def.source:  # 有 from 字段（非纯常量）
                 needed_sources.add(ch_def.source)
         # 检查每个源是否已映射（或有 constant 兜底）
@@ -138,10 +138,10 @@ def check_texture_mapping(
                 # 检查是否所有引用此 source 的通道都有 constant 兜底
                 all_have_fallback = all(
                     ch_def.constant is not None
-                    for ch_def in output_def.channels.values()
+                    for ch_def in proc_def.channels.values()
                     if ch_def.source == source
                 )
-                if output_def.allow_missing and all_have_fallback:
+                if proc_def.allow_missing and all_have_fallback:
                     continue  # allow_missing + constant 兜底 = 可接受
                 if source not in missing_slots:
                     missing_slots.append(source)
@@ -197,7 +197,7 @@ def run_check_chain(
 
     # 检查 2：主材质
     failure2 = check_master_material(
-        config.default_master_material_path,
+        config.output.material.master_material_path,
         material_exists_fn,
     )
     if failure2:

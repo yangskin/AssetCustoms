@@ -1,7 +1,10 @@
 """名称解析器单元测试。"""
 import pytest
 
-from core.config.schema import AssetNamingTemplate, AssetSubdirectories, PluginConfig, TextureOutputDef
+from core.config.schema import (
+    NamingConfig, SubdirectoriesConfig, PluginConfig, TextureProcessingDef,
+    OutputConfig, ProcessingConfig,
+)
 from core.naming import (
     ResolvedNames,
     compute_isolation_path,
@@ -30,17 +33,21 @@ class TestExpandTemplate:
 class TestResolveNames:
     def _make_config(self) -> PluginConfig:
         return PluginConfig(
-            target_path_template="/Game/Assets/{Category}/{Name}",
-            asset_naming_template=AssetNamingTemplate(
-                static_mesh="SM_{Name}",
-                material_instance="MI_{Name}",
-                texture="T_{Name}_{Suffix}",
+            output=OutputConfig(
+                target_path_template="/Game/Assets/{Category}/{Name}",
+                naming=NamingConfig(
+                    static_mesh="SM_{Name}",
+                    material_instance="MI_{Name}",
+                    texture="T_{Name}_{Suffix}",
+                ),
             ),
-            texture_output_definitions=[
-                TextureOutputDef(enabled=True, suffix="D"),
-                TextureOutputDef(enabled=True, suffix="N"),
-                TextureOutputDef(enabled=False, suffix="H"),  # disabled
-            ],
+            processing=ProcessingConfig(
+                texture_definitions=[
+                    TextureProcessingDef(enabled=True, suffix="D"),
+                    TextureProcessingDef(enabled=True, suffix="N"),
+                    TextureProcessingDef(enabled=False, suffix="H"),  # disabled
+                ],
+            ),
         )
 
     def test_basic_resolution(self):
@@ -61,7 +68,7 @@ class TestResolveNames:
 
     def test_subdirectories(self):
         cfg = self._make_config()
-        cfg.asset_subdirectories = AssetSubdirectories(
+        cfg.output.subdirectories = SubdirectoriesConfig(
             static_mesh="",
             material_instance="Materials",
             texture="Textures",
@@ -73,7 +80,7 @@ class TestResolveNames:
 
     def test_subdirectories_all_empty(self):
         cfg = self._make_config()
-        cfg.asset_subdirectories = AssetSubdirectories(
+        cfg.output.subdirectories = SubdirectoriesConfig(
             static_mesh="", material_instance="", texture="",
         )
         names = resolve_names(cfg, "Box", "Prop")
@@ -84,7 +91,7 @@ class TestResolveNames:
     def test_empty_template_fallback_to_current_path(self):
         """target_path_template 为空时应 fallback 到 current_path。"""
         cfg = self._make_config()
-        cfg.target_path_template = ""
+        cfg.output.target_path_template = ""
         names = resolve_names(cfg, "Lamp", "Prop", "/Game/MyProject/Props")
         assert names.target_path == "/Game/MyProject/Props"
         assert names.sm_path == "/Game/MyProject/Props/SM_Lamp"
@@ -98,11 +105,13 @@ class TestResolveNames:
 
     def test_character_config(self):
         cfg = PluginConfig(
-            target_path_template="/Game/Characters/{Name}",
-            asset_naming_template=AssetNamingTemplate(
-                static_mesh="SK_{Name}",
-                material_instance="MI_{Name}_Char",
-                texture="T_{Name}_{Suffix}",
+            output=OutputConfig(
+                target_path_template="/Game/Characters/{Name}",
+                naming=NamingConfig(
+                    static_mesh="SK_{Name}",
+                    material_instance="MI_{Name}_Char",
+                    texture="T_{Name}_{Suffix}",
+                ),
             ),
         )
         names = resolve_names(cfg, "Hero", "Character", suffixes=["D", "N", "SSS"])

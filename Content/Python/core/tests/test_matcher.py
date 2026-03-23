@@ -3,7 +3,7 @@ import os
 import tempfile
 import pytest
 
-from core.config.schema import TextureInputRule, TextureInputRules
+from core.config.schema import TextureInputRule, TextureInputConfig
 from core.textures.matcher import (
     MatchResult,
     discover_texture_files,
@@ -128,7 +128,7 @@ class TestDiscoverTextureFiles:
 # 贴图匹配
 # ---------------------------------------------------------------------------
 
-def _make_rules(**kwargs) -> TextureInputRules:
+def _make_rules(**kwargs) -> TextureInputConfig:
     defaults = dict(
         match_mode="glob",
         ignore_case=True,
@@ -143,7 +143,7 @@ def _make_rules(**kwargs) -> TextureInputRules:
         },
     )
     defaults.update(kwargs)
-    return TextureInputRules(**defaults)
+    return TextureInputConfig(**defaults)
 
 
 class TestMatchTextures:

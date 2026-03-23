@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 if TYPE_CHECKING:
-    from core.config.schema import ChannelDef, TextureOutputDef
+    from core.config.schema import ChannelDef, TextureProcessingDef
 
 try:
     from PIL import Image  # type: ignore
@@ -51,7 +51,7 @@ def _apply_transforms(arr: Any, ch_def: ChannelDef) -> Any:
 
 
 def pack_channels(
-    output_def: TextureOutputDef,
+    output_def: TextureProcessingDef,
     sources: Dict[str, Any],
     size: Optional[Tuple[int, int]] = None,
 ) -> Any:
@@ -86,7 +86,7 @@ def pack_channels(
 
 
 def _pack_numpy(
-    output_def: TextureOutputDef,
+    output_def: TextureProcessingDef,
     sources: Dict[str, Any],
     size: Tuple[int, int],
     channel_order: list,
@@ -129,7 +129,7 @@ def _pack_numpy(
 
 
 def _pack_pillow(
-    output_def: TextureOutputDef,
+    output_def: TextureProcessingDef,
     sources: Dict[str, Any],
     size: Tuple[int, int],
     channel_order: list,

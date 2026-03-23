@@ -18,7 +18,7 @@ try:
 except Exception:
     unreal = None
 
-from core.config.schema import PluginConfig, TextureOutputDef
+from core.config.schema import MeshImportConfig, PluginConfig, TextureProcessingDef
 from core.naming import (
     ResolvedNames,
     compute_isolation_path,
@@ -70,15 +70,85 @@ class ImportPipelineResult:
 class UnrealAssetOps:
     """封装 Unreal 资产操作的接口类，便于测试时 mock。"""
 
+    # ── 枚举映射（延迟初始化，避免 unreal 未导入时报错）──
+    _enum_maps_initialized = False
+    _NORMAL_IMPORT_MAP: dict = {}
+    _NORMAL_GEN_MAP: dict = {}
+    _VERTEX_COLOR_MAP: dict = {}
+    _CONTENT_TYPE_MAP: dict = {}
+
+    @classmethod
+    def _init_enum_maps(cls) -> None:
+        """首次使用时从 unreal 模块构建枚举映射。"""
+        if cls._enum_maps_initialized or unreal is None:
+            return
+        cls._NORMAL_IMPORT_MAP = {
+            "ComputeNormals": unreal.FBXNormalImportMethod.FBXNIM_COMPUTE_NORMALS,
+            "ImportNormals": unreal.FBXNormalImportMethod.FBXNIM_IMPORT_NORMALS,
+            "ImportNormalsAndTangents": unreal.FBXNormalImportMethod.FBXNIM_IMPORT_NORMALS_AND_TANGENTS,
+        }
+        cls._NORMAL_GEN_MAP = {
+            "BuiltIn": unreal.FBXNormalGenerationMethod.BUILT_IN,
+            "MikkTSpace": unreal.FBXNormalGenerationMethod.MIKK_T_SPACE,
+        }
+        cls._VERTEX_COLOR_MAP = {
+            "Replace": unreal.VertexColorImportOption.REPLACE,
+            "Ignore": unreal.VertexColorImportOption.IGNORE,
+            "Override": unreal.VertexColorImportOption.OVERRIDE,
+        }
+        cls._CONTENT_TYPE_MAP = {
+            "All": unreal.FBXImportContentType.FBXICT_ALL,
+            "Geometry": unreal.FBXImportContentType.FBXICT_GEOMETRY,
+            "SkinningWeights": unreal.FBXImportContentType.FBXICT_SKINNING_WEIGHTS,
+        }
+        cls._enum_maps_initialized = True
+
+    def _apply_shared_mesh_props(self, mesh_data: Any, mi: MeshImportConfig) -> None:
+        """Static/Skeletal 共有属性设置到 mesh_data 上。"""
+        self._init_enum_maps()
+        mesh_data.set_editor_property("import_uniform_scale", mi.import_uniform_scale)
+
+        nim = self._NORMAL_IMPORT_MAP.get(mi.normal_import_method)
+        if nim is not None:
+            mesh_data.set_editor_property("normal_import_method", nim)
+        ngm = self._NORMAL_GEN_MAP.get(mi.normal_generation_method)
+        if ngm is not None:
+            mesh_data.set_editor_property("normal_generation_method", ngm)
+        mesh_data.set_editor_property("compute_weighted_normals", mi.compute_weighted_normals)
+
+        vci = self._VERTEX_COLOR_MAP.get(mi.vertex_color_import_option)
+        if vci is not None:
+            mesh_data.set_editor_property("vertex_color_import_option", vci)
+        if mi.vertex_color_import_option == "Override" and mi.vertex_override_color:
+            c = mi.vertex_override_color
+            mesh_data.set_editor_property("vertex_override_color", unreal.Color(r=c[0], g=c[1], b=c[2], a=c[3] if len(c) > 3 else 255))
+
+        mesh_data.set_editor_property("remove_degenerates", mi.remove_degenerates)
+        mesh_data.set_editor_property("build_reversed_index_buffer", mi.build_reversed_index_buffer)
+
+        mesh_data.set_editor_property("convert_scene", mi.convert_scene)
+        mesh_data.set_editor_property("convert_scene_unit", mi.convert_scene_unit)
+        mesh_data.set_editor_property("force_front_x_axis", mi.force_front_x_axis)
+        if mi.import_rotation:
+            mesh_data.set_editor_property("import_rotation", unreal.Rotator(pitch=mi.import_rotation[0], yaw=mi.import_rotation[1], roll=mi.import_rotation[2]))
+        if mi.import_translation:
+            mesh_data.set_editor_property("import_translation", unreal.Vector(x=mi.import_translation[0], y=mi.import_translation[1], z=mi.import_translation[2]))
+
+        mesh_data.set_editor_property("import_mesh_lods", mi.import_mesh_lods)
+
     def import_fbx(
         self,
         fbx_path: str,
         destination_path: str,
         import_textures: bool = True,
+        mesh_import: Optional[MeshImportConfig] = None,
     ) -> List[str]:
         """导入 FBX 到隔离区，返回导入后的资产名列表。"""
         if unreal is None:
             raise RuntimeError("Unreal 环境不可用")
+        self._init_enum_maps()
+
+        mi = mesh_import or MeshImportConfig()
 
         task = unreal.AssetImportTask()
         task.set_editor_property("filename", fbx_path)
@@ -90,9 +160,43 @@ class UnrealAssetOps:
         # FBX 设置
         fbx_options = unreal.FbxImportUI()
         fbx_options.set_editor_property("import_mesh", True)
-        fbx_options.set_editor_property("import_textures", import_textures)
-        fbx_options.set_editor_property("import_materials", True)
-        fbx_options.set_editor_property("import_as_skeletal", False)
+        fbx_options.set_editor_property("import_textures", mi.import_textures if mesh_import else import_textures)
+        fbx_options.set_editor_property("import_materials", mi.import_materials)
+        fbx_options.set_editor_property("import_as_skeletal", mi.import_as_skeletal)
+        fbx_options.set_editor_property("import_animations", mi.import_animations)
+
+        if mi.import_as_skeletal:
+            # ── SkeletalMesh 路径 ──
+            if mi.skeleton_path:
+                skeleton = unreal.load_asset(mi.skeleton_path)
+                if skeleton is not None:
+                    fbx_options.set_editor_property("skeleton", skeleton)
+            fbx_options.set_editor_property("create_physics_asset", mi.create_physics_asset)
+            ct = self._CONTENT_TYPE_MAP.get(mi.import_content_type)
+            if ct is not None:
+                fbx_options.set_editor_property("mesh_type_to_import", ct)
+
+            sk_data = fbx_options.get_editor_property("skeletal_mesh_import_data")
+            if sk_data is not None:
+                self._apply_shared_mesh_props(sk_data, mi)
+                sk_data.set_editor_property("import_morph_targets", mi.import_morph_targets)
+                sk_data.set_editor_property("import_meshes_in_bone_hierarchy", mi.import_meshes_in_bone_hierarchy)
+                sk_data.set_editor_property("update_skeleton_reference_pose", mi.update_skeleton_reference_pose)
+                sk_data.set_editor_property("use_t0_as_ref_pose", mi.use_t0_as_ref_pose)
+                sk_data.set_editor_property("preserve_smoothing_groups", mi.preserve_smoothing_groups)
+        else:
+            # ── StaticMesh 路径 ──
+            sm_data = fbx_options.get_editor_property("static_mesh_import_data")
+            if sm_data is not None:
+                self._apply_shared_mesh_props(sm_data, mi)
+                sm_data.set_editor_property("auto_generate_collision", mi.auto_generate_collision)
+                sm_data.set_editor_property("combine_meshes", mi.combine_meshes)
+                sm_data.set_editor_property("build_nanite", mi.build_nanite)
+                sm_data.set_editor_property("generate_lightmap_u_vs", mi.generate_lightmap_u_vs)
+                if mi.static_mesh_lod_group and mi.static_mesh_lod_group != "None":
+                    sm_data.set_editor_property("static_mesh_lod_group", mi.static_mesh_lod_group)
+                sm_data.set_editor_property("reorder_material_to_fbx_order", mi.reorder_material_to_fbx_order)
+
         task.set_editor_property("options", fbx_options)
 
         unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
@@ -381,10 +485,31 @@ def _read_auto_material_slot_mapping(
 
 
 # ---------------------------------------------------------------------------
+# 导入设置合并
+# ---------------------------------------------------------------------------
+
+def _resolve_import_settings(config: PluginConfig, suffix: str) -> Dict:
+    """从 output.texture_import_defaults + texture_import_overrides[suffix] 合并导入设置。"""
+    defaults = config.output.texture_import_defaults
+    settings = {
+        "compression": defaults.compression,
+        "lod_group": defaults.lod_group,
+        "srgb": defaults.srgb,
+        "virtual_texture": defaults.virtual_texture,
+        "address_x": defaults.address_x,
+        "address_y": defaults.address_y,
+        "mip_gen": defaults.mip_gen,
+    }
+    overrides = config.output.texture_import_overrides.get(suffix, {})
+    settings.update(overrides)
+    return settings
+
+
+# ---------------------------------------------------------------------------
 # 直通判断
 # ---------------------------------------------------------------------------
 
-def _is_direct_passthrough(output_def: TextureOutputDef) -> Optional[str]:
+def _is_direct_passthrough(output_def: TextureProcessingDef) -> Optional[str]:
     """检查输出定义是否可直接使用单个嵌入贴图（无需 Pillow 处理）。
 
     条件：所有 RGB 通道来自同一源、同名映射（R→R, G→G, B→B）、
@@ -418,14 +543,14 @@ def _is_direct_passthrough(output_def: TextureOutputDef) -> Optional[str]:
 def _find_output_for_slot(
     config: PluginConfig,
     slot_name: str,
-) -> Optional[TextureOutputDef]:
+) -> Optional[TextureProcessingDef]:
     """找到以 slot_name 为唯一来源的 enabled 输出定义。"""
-    for output_def in config.texture_output_definitions:
-        if not output_def.enabled:
+    for proc_def in config.processing.texture_definitions:
+        if not proc_def.enabled:
             continue
-        sources = {ch.source for ch in output_def.channels.values() if ch.source}
+        sources = {ch.source for ch in proc_def.channels.values() if ch.source}
         if sources == {slot_name}:
-            return output_def
+            return proc_def
     return None
 
 
@@ -451,7 +576,7 @@ def _match_embedded_textures_to_slots(
         fake_path = asset_name + ".png"
         path_lookup[fake_path] = ue_path
 
-    match_result = match_textures(list(path_lookup.keys()), config.texture_input_rules)
+    match_result = match_textures(list(path_lookup.keys()), config.input.texture)
 
     slot_mapping: Dict[str, str] = {}
     matched_ue_paths = set()
@@ -548,7 +673,7 @@ def _run_native_embedded_pipeline(
     # 5. 解析目标路径（冲突策略）
     result.phase = "standardize"
     final_target = resolve_conflict(
-        names.target_path, config.conflict_policy, ops.asset_exists,
+        names.target_path, config.processing.conflict_policy, ops.asset_exists,
     )
     if final_target is None:
         result.errors.append(f"目标路径已存在且策略为 skip: {names.target_path}")
@@ -572,19 +697,16 @@ def _run_native_embedded_pipeline(
             logger.info("Renamed texture: %s → %s", ue_tex_path, new_path)
 
             # 应用导入设置
-            import_settings_dict = {
-                "compression": output_def.import_settings.compression,
-                "lod_group": output_def.import_settings.lod_group,
-                "srgb": output_def.srgb,
-                "virtual_texture": output_def.import_settings.virtual_texture,
-            }
+            import_settings_dict = _resolve_import_settings(config, output_def.suffix)
+            if import_settings_dict.get("srgb") is None:
+                import_settings_dict["srgb"] = output_def.srgb
             ops.apply_texture_import_settings(new_path, import_settings_dict)
 
             processed_textures.append(ProcessedTexture(
-                output_name=output_def.output_name,
+                output_name=output_def.name,
                 suffix=output_def.suffix,
                 file_path=new_path,
-                material_parameter=output_def.material_parameter,
+                material_parameter=config.output.material.parameter_bindings.get(output_def.suffix, ""),
                 import_settings=import_settings_dict,
                 srgb=output_def.srgb,
             ))
@@ -599,9 +721,9 @@ def _run_native_embedded_pipeline(
 
         # 8. 创建 MI 并链接贴图
         mi = None
-        if config.default_master_material_path:
+        if config.output.material.master_material_path:
             mi_dst = names.mi_path or f"{final_target}/{names.material_instance}"
-            mi = ops.create_material_instance(mi_dst, config.default_master_material_path)
+            mi = ops.create_material_instance(mi_dst, config.output.material.master_material_path)
             if mi:
                 for pt in processed_textures:
                     if pt.material_parameter:
@@ -664,13 +786,15 @@ def run_import_pipeline(
     # --- 阶段 1：计算隔离区路径并导入 ---
     result.phase = "import"
     isolation_path = compute_isolation_path(
-        current_path, base_name, config.default_fallback_import_path,
+        current_path, base_name, config.output.fallback_path,
     )
     result.isolation_path = isolation_path
 
     try:
         imported_assets = ops.import_fbx(
-            fbx_path, isolation_path, import_textures=True,
+            fbx_path, isolation_path,
+            import_textures=True,
+            mesh_import=config.processing.mesh_import,
         )
     except Exception as e:
         result.errors.append(f"FBX 导入失败: {e}")
@@ -696,8 +820,8 @@ def run_import_pipeline(
     # 2d: 发现外部磁盘贴图
     drop_dir = os.path.dirname(fbx_path)
     disk_texture_files = discover_texture_files(
-        search_roots=config.texture_input_rules.search_roots,
-        extensions=config.texture_input_rules.extensions,
+        search_roots=config.input.texture.search_roots,
+        extensions=config.input.texture.extensions,
         drop_dir=drop_dir,
     )
 
@@ -804,22 +928,22 @@ def run_import_pipeline(
         mapping = check_result.match_result.mapping if check_result.match_result else {}
 
         # 5.1 识别可直接使用嵌入贴图的输出（passthrough：同源同通道、无变换）
-        direct_suffixes: Dict[str, tuple] = {}  # suffix → (output_def, ue_tex_path)
-        for output_def in config.texture_output_definitions:
-            if not output_def.enabled:
+        direct_suffixes: Dict[str, tuple] = {}  # suffix → (proc_def, ue_tex_path)
+        for proc_def in config.processing.texture_definitions:
+            if not proc_def.enabled:
                 continue
-            source_slot = _is_direct_passthrough(output_def)
+            source_slot = _is_direct_passthrough(proc_def)
             if source_slot is None or source_slot not in mapping:
                 continue
             matched_path = mapping[source_slot]
             if matched_path not in embedded_lookup:
                 continue
-            direct_suffixes[output_def.suffix] = (output_def, embedded_lookup[matched_path])
+            direct_suffixes[proc_def.suffix] = (proc_def, embedded_lookup[matched_path])
 
         if direct_suffixes:
             logger.info(
                 "Direct embedded passthrough outputs: %s",
-                ", ".join(f"{s} ({od.output_name})" for s, (od, _) in direct_suffixes.items()),
+                ", ".join(f"{s} ({pd.name})" for s, (pd, _) in direct_suffixes.items()),
             )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -848,9 +972,9 @@ def run_import_pipeline(
             # 5.3 Pillow 处理（跳过已直接处理的输出）
             if direct_suffixes:
                 pillow_config = copy.deepcopy(config)
-                for od in pillow_config.texture_output_definitions:
-                    if od.suffix in direct_suffixes:
-                        od.enabled = False
+                for pd in pillow_config.processing.texture_definitions:
+                    if pd.suffix in direct_suffixes:
+                        pd.enabled = False
             else:
                 pillow_config = config
 
@@ -865,7 +989,7 @@ def run_import_pipeline(
             # 5.4 解析目标路径（冲突策略）
             target_path = names.target_path
             final_target = resolve_conflict(
-                target_path, config.conflict_policy, ops.asset_exists,
+                target_path, config.processing.conflict_policy, ops.asset_exists,
             )
             if final_target is None:
                 result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
@@ -883,27 +1007,23 @@ def run_import_pipeline(
 
             # 5.5 处理直接嵌入贴图（重命名 + 移动 + 应用导入设置）
             all_processed: List[ProcessedTexture] = []
-            for suffix, (output_def, ue_tex_path) in direct_suffixes.items():
+            for suffix, (proc_def, ue_tex_path) in direct_suffixes.items():
                 tex_name = names.texture_names.get(suffix)
                 if not tex_name:
                     continue
                 new_path = f"{tex_base}/{tex_name}"
                 ops.rename_asset(ue_tex_path, new_path)
-                imp = output_def.import_settings
-                settings = {
-                    "compression": imp.compression,
-                    "lod_group": imp.lod_group,
-                    "srgb": output_def.srgb,
-                    "virtual_texture": imp.virtual_texture,
-                }
+                settings = _resolve_import_settings(config, suffix)
+                if settings.get("srgb") is None:
+                    settings["srgb"] = proc_def.srgb
                 ops.apply_texture_import_settings(new_path, settings)
                 all_processed.append(ProcessedTexture(
-                    output_name=output_def.output_name,
+                    output_name=proc_def.name,
                     suffix=suffix,
                     file_path=new_path,
-                    material_parameter=output_def.material_parameter,
+                    material_parameter=config.output.material.parameter_bindings.get(suffix, ""),
                     import_settings=settings,
-                    srgb=output_def.srgb,
+                    srgb=proc_def.srgb,
                 ))
                 logger.info("Direct embedded texture: %s → %s", ue_tex_path, new_path)
 
@@ -920,8 +1040,8 @@ def run_import_pipeline(
 
             # 5.7 MIC 创建
             mi = None
-            if config.default_master_material_path:
-                mi = ops.create_material_instance(mi_dst_path, config.default_master_material_path)
+            if config.output.material.master_material_path:
+                mi = ops.create_material_instance(mi_dst_path, config.output.material.master_material_path)
 
                 for proc_tex in all_processed:
                     tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
@@ -1023,16 +1143,16 @@ def resume_after_triage(
 
         # 5.1 识别直通嵌入贴图
         direct_suffixes: Dict[str, tuple] = {}
-        for output_def in config.texture_output_definitions:
-            if not output_def.enabled:
+        for proc_def in config.processing.texture_definitions:
+            if not proc_def.enabled:
                 continue
-            source_slot = _is_direct_passthrough(output_def)
+            source_slot = _is_direct_passthrough(proc_def)
             if source_slot is None or source_slot not in mapping:
                 continue
             matched_path = mapping[source_slot]
             if matched_path not in embedded_lookup:
                 continue
-            direct_suffixes[output_def.suffix] = (output_def, embedded_lookup[matched_path])
+            direct_suffixes[proc_def.suffix] = (proc_def, embedded_lookup[matched_path])
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             # 5.2 Pillow 源映射
@@ -1054,9 +1174,9 @@ def resume_after_triage(
             # 5.3 Pillow 处理
             if direct_suffixes:
                 pillow_config = copy.deepcopy(config)
-                for od in pillow_config.texture_output_definitions:
-                    if od.suffix in direct_suffixes:
-                        od.enabled = False
+                for pd in pillow_config.processing.texture_definitions:
+                    if pd.suffix in direct_suffixes:
+                        pd.enabled = False
             else:
                 pillow_config = config
 
@@ -1071,7 +1191,7 @@ def resume_after_triage(
             # 5.4 目标路径
             target_path = names.target_path
             final_target = resolve_conflict(
-                target_path, config.conflict_policy, ops.asset_exists,
+                target_path, config.processing.conflict_policy, ops.asset_exists,
             )
             if final_target is None:
                 pipeline_result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
@@ -1089,27 +1209,23 @@ def resume_after_triage(
 
             # 5.5 直接嵌入贴图
             all_processed: List[ProcessedTexture] = []
-            for suffix, (output_def, ue_tex_path) in direct_suffixes.items():
+            for suffix, (proc_def, ue_tex_path) in direct_suffixes.items():
                 tex_name = names.texture_names.get(suffix)
                 if not tex_name:
                     continue
                 new_path = f"{tex_base}/{tex_name}"
                 ops.rename_asset(ue_tex_path, new_path)
-                imp = output_def.import_settings
-                settings = {
-                    "compression": imp.compression,
-                    "lod_group": imp.lod_group,
-                    "srgb": output_def.srgb,
-                    "virtual_texture": imp.virtual_texture,
-                }
+                settings = _resolve_import_settings(config, suffix)
+                if settings.get("srgb") is None:
+                    settings["srgb"] = proc_def.srgb
                 ops.apply_texture_import_settings(new_path, settings)
                 all_processed.append(ProcessedTexture(
-                    output_name=output_def.output_name,
+                    output_name=proc_def.name,
                     suffix=suffix,
                     file_path=new_path,
-                    material_parameter=output_def.material_parameter,
+                    material_parameter=config.output.material.parameter_bindings.get(suffix, ""),
                     import_settings=settings,
-                    srgb=output_def.srgb,
+                    srgb=proc_def.srgb,
                 ))
 
             # 5.6 导入 Pillow 贴图
@@ -1121,8 +1237,8 @@ def resume_after_triage(
 
             # 5.7 MIC 创建
             mi = None
-            if config.default_master_material_path:
-                mi = ops.create_material_instance(mi_dst_path, config.default_master_material_path)
+            if config.output.material.master_material_path:
+                mi = ops.create_material_instance(mi_dst_path, config.output.material.master_material_path)
 
                 for proc_tex in all_processed:
                     tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]

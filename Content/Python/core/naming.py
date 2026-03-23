@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
-from core.config.schema import AssetNamingTemplate, AssetSubdirectories, PluginConfig
+from core.config.schema import PluginConfig
 
 
 @dataclass
@@ -57,26 +57,26 @@ def resolve_names(
         suffixes: 贴图后缀列表（如 ["D", "N", "MRO"]），不传则从 output definitions 提取。
     """
     variables = {"Name": base_name, "Category": category}
-    ant = config.asset_naming_template
+    naming = config.output.naming
 
-    sm_name = _expand_template(ant.static_mesh, variables)
-    mi_name = _expand_template(ant.material_instance, variables)
+    sm_name = _expand_template(naming.static_mesh, variables)
+    mi_name = _expand_template(naming.material_instance, variables)
 
     if suffixes is None:
-        suffixes = [d.suffix for d in config.texture_output_definitions if d.enabled and d.suffix]
+        suffixes = [d.suffix for d in config.processing.texture_definitions if d.enabled and d.suffix]
 
     tex_names: Dict[str, str] = {}
     for suffix in suffixes:
         tex_vars = {**variables, "Suffix": suffix}
-        tex_names[suffix] = _expand_template(ant.texture, tex_vars)
+        tex_names[suffix] = _expand_template(naming.texture, tex_vars)
 
-    target_path = _expand_template(config.target_path_template, variables)
+    target_path = _expand_template(config.output.target_path_template, variables)
     if not target_path:
         target_path = current_path
     isolation_path = f"{current_path}/_temp_{base_name}"
 
     # 子目录路径计算
-    sub = config.asset_subdirectories
+    sub = config.output.subdirectories
     sm_base = f"{target_path}/{sub.static_mesh}" if sub.static_mesh else target_path
     mi_base = f"{target_path}/{sub.material_instance}" if sub.material_instance else target_path
     tex_base = f"{target_path}/{sub.texture}" if sub.texture else target_path

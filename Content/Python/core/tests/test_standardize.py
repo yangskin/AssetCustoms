@@ -11,10 +11,13 @@ except ImportError:
 
 from core.config.schema import (
     ChannelDef,
-    ImportSettings,
+    MaterialOutputConfig,
+    NamingConfig,
+    OutputConfig,
     PluginConfig,
-    TextureOutputDef,
-    AssetNamingTemplate,
+    ProcessingConfig,
+    TextureImportDefaults,
+    TextureProcessingDef,
 )
 from core.pipeline.standardize import (
     ProcessedTexture,
@@ -87,66 +90,72 @@ class TestLoadSourceImages:
 class TestProcessTextures:
     def _make_config(self) -> PluginConfig:
         return PluginConfig(
-            asset_naming_template=AssetNamingTemplate(
-                texture="T_{Name}_{Suffix}",
+            processing=ProcessingConfig(
+                texture_definitions=[
+                    TextureProcessingDef(
+                        enabled=True,
+                        name="Diffuse",
+                        suffix="D",
+                        srgb=True,
+                        format="PNG",
+                        bit_depth=8,
+                        channels={
+                            "R": ChannelDef(source="BaseColor", ch="R"),
+                            "G": ChannelDef(source="BaseColor", ch="G"),
+                            "B": ChannelDef(source="BaseColor", ch="B"),
+                            "A": ChannelDef(constant=1.0),
+                        },
+                    ),
+                    TextureProcessingDef(
+                        enabled=True,
+                        name="Normal",
+                        suffix="N",
+                        srgb=False,
+                        flip_green=True,
+                        format="PNG",
+                        bit_depth=8,
+                        channels={
+                            "R": ChannelDef(source="Normal", ch="R"),
+                            "G": ChannelDef(source="Normal", ch="G"),
+                            "B": ChannelDef(source="Normal", ch="B"),
+                            "A": ChannelDef(constant=1.0),
+                        },
+                    ),
+                    TextureProcessingDef(
+                        enabled=True,
+                        name="Packed_MRO",
+                        suffix="MRO",
+                        srgb=False,
+                        allow_missing=True,
+                        format="PNG",
+                        bit_depth=8,
+                        channels={
+                            "R": ChannelDef(source="Metallic", ch="R", constant=0.0),
+                            "G": ChannelDef(source="Roughness", ch="R", constant=0.5),
+                            "B": ChannelDef(source="AmbientOcclusion", ch="R", constant=1.0),
+                            "A": ChannelDef(constant=1.0),
+                        },
+                    ),
+                ],
             ),
-            texture_output_definitions=[
-                TextureOutputDef(
-                    enabled=True,
-                    output_name="Diffuse",
-                    suffix="D",
-                    srgb=True,
-                    file_format="PNG",
-                    bit_depth=8,
-                    material_parameter="BaseColor_Texture",
-                    channels={
-                        "R": ChannelDef(source="BaseColor", ch="R"),
-                        "G": ChannelDef(source="BaseColor", ch="G"),
-                        "B": ChannelDef(source="BaseColor", ch="B"),
-                        "A": ChannelDef(constant=1.0),
+            output=OutputConfig(
+                naming=NamingConfig(texture="T_{Name}_{Suffix}"),
+                material=MaterialOutputConfig(
+                    parameter_bindings={
+                        "D": "BaseColor_Texture",
+                        "N": "Normal_Texture",
+                        "MRO": "Packed_Texture",
                     },
-                    import_settings=ImportSettings(
-                        compression="TC_Default",
-                        lod_group="TEXTUREGROUP_World",
-                    ),
                 ),
-                TextureOutputDef(
-                    enabled=True,
-                    output_name="Normal",
-                    suffix="N",
-                    srgb=False,
-                    flip_green=True,
-                    file_format="PNG",
-                    bit_depth=8,
-                    material_parameter="Normal_Texture",
-                    channels={
-                        "R": ChannelDef(source="Normal", ch="R"),
-                        "G": ChannelDef(source="Normal", ch="G"),
-                        "B": ChannelDef(source="Normal", ch="B"),
-                        "A": ChannelDef(constant=1.0),
-                    },
-                    import_settings=ImportSettings(
-                        compression="TC_Normalmap",
-                    ),
+                texture_import_defaults=TextureImportDefaults(
+                    compression="TC_Default",
+                    lod_group="TEXTUREGROUP_World",
                 ),
-                TextureOutputDef(
-                    enabled=True,
-                    output_name="Packed_MRO",
-                    suffix="MRO",
-                    srgb=False,
-                    allow_missing=True,
-                    file_format="PNG",
-                    bit_depth=8,
-                    material_parameter="Packed_Texture",
-                    channels={
-                        "R": ChannelDef(source="Metallic", ch="R", constant=0.0),
-                        "G": ChannelDef(source="Roughness", ch="R", constant=0.5),
-                        "B": ChannelDef(source="AmbientOcclusion", ch="R", constant=1.0),
-                        "A": ChannelDef(constant=1.0),
-                    },
-                    import_settings=ImportSettings(compression="TC_Masks"),
-                ),
-            ],
+                texture_import_overrides={
+                    "N": {"compression": "TC_Normalmap"},
+                    "MRO": {"compression": "TC_Masks"},
+                },
+            ),
         )
 
     def test_full_pipeline(self, tmp_path):
@@ -195,7 +204,7 @@ class TestProcessTextures:
 
     def test_disabled_output_skipped(self, tmp_path):
         cfg = self._make_config()
-        cfg.texture_output_definitions[0].enabled = False  # 禁用 Diffuse
+        cfg.processing.texture_definitions[0].enabled = False  # 禁用 Diffuse
 
         bc_path = _save_test_image(str(tmp_path / "Rock_BC.png"))
         n_path = _save_test_image(str(tmp_path / "Rock_N.png"))

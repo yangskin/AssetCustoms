@@ -13,7 +13,7 @@ try:
 except Exception:
     Image = None  # type: ignore
 
-from core.config.schema import ChannelDef, TextureOutputDef
+from core.config.schema import ChannelDef, TextureProcessingDef
 from core.textures.channel_pack import pack_channels
 import core.textures.channel_pack as channel_pack_mod
 
@@ -37,7 +37,7 @@ def _make_output_def(channels_dict):
             gamma=v.get("gamma"),
             remap=v.get("remap"),
         )
-    return TextureOutputDef(channels=channels)
+    return TextureProcessingDef(channels=channels)
 
 
 # --- 基础：MRO 打包 ---
@@ -116,7 +116,7 @@ def test_resize():
 
 def test_undefined_channel_defaults():
     """未定义的通道使用默认值：A=255，其他=0。"""
-    od = TextureOutputDef(channels={})
+    od = TextureProcessingDef(channels={})
     result = pack_channels(od, {}, size=(1, 1))
     px = result.getpixel((0, 0))
     assert px[0] == 0    # R default

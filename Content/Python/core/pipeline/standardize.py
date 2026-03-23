@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
 
-from core.config.schema import PluginConfig, TextureOutputDef
+from core.config.schema import PluginConfig, TextureProcessingDef
 from core.textures.channel_pack import pack_channels
 
 import logging
@@ -23,6 +23,23 @@ try:
     from PIL import Image  # type: ignore
 except Exception:
     Image = None  # type: ignore
+
+
+def _resolve_import_settings(config: PluginConfig, suffix: str) -> Dict:
+    """从 output.texture_import_defaults + texture_import_overrides[suffix] 合并导入设置。"""
+    defaults = config.output.texture_import_defaults
+    settings = {
+        "compression": defaults.compression,
+        "lod_group": defaults.lod_group,
+        "srgb": defaults.srgb,
+        "virtual_texture": defaults.virtual_texture,
+        "address_x": defaults.address_x,
+        "address_y": defaults.address_y,
+        "mip_gen": defaults.mip_gen,
+    }
+    overrides = config.output.texture_import_overrides.get(suffix, {})
+    settings.update(overrides)
+    return settings
 
 
 @dataclass
@@ -159,53 +176,46 @@ def process_textures(
     result = StandardizeResult()
     sources = _load_source_images(mapping)
 
-    for output_def in config.texture_output_definitions:
-        if not output_def.enabled:
+    for proc_def in config.processing.texture_definitions:
+        if not proc_def.enabled:
             continue
         try:
             # 通道编排
-            img = pack_channels(output_def, sources)
+            img = pack_channels(proc_def, sources)
 
             # 法线 flip_green
-            if output_def.flip_green:
+            if proc_def.flip_green:
                 img = _apply_flip_green(img)
 
             # 可选缩放
-            img = _resize_image(img, output_def.resize)
+            img = _resize_image(img, proc_def.resize)
 
             # 生成文件名
-            tex_name = config.asset_naming_template.texture
+            tex_name = config.output.naming.texture
             tex_name = tex_name.replace("{Name}", base_name)
-            tex_name = tex_name.replace("{Suffix}", output_def.suffix)
+            tex_name = tex_name.replace("{Suffix}", proc_def.suffix)
 
             # 保存
             file_path = _save_image(
                 img, output_dir, tex_name,
-                output_def.file_format, output_def.bit_depth,
+                proc_def.format, proc_def.bit_depth,
             )
 
-            # 收集 import_settings 为字典
-            imp = output_def.import_settings
-            import_settings_dict = {
-                "compression": imp.compression,
-                "lod_group": imp.lod_group,
-                "srgb": imp.srgb if imp.srgb is not None else output_def.srgb,
-                "virtual_texture": imp.virtual_texture,
-                "address_x": imp.address_x,
-                "address_y": imp.address_y,
-                "mip_gen": imp.mip_gen,
-            }
+            # 合并导入设置
+            import_settings_dict = _resolve_import_settings(config, proc_def.suffix)
+            if import_settings_dict.get("srgb") is None:
+                import_settings_dict["srgb"] = proc_def.srgb
 
             result.textures.append(ProcessedTexture(
-                output_name=output_def.output_name,
-                suffix=output_def.suffix,
+                output_name=proc_def.name,
+                suffix=proc_def.suffix,
                 file_path=file_path,
-                material_parameter=output_def.material_parameter,
+                material_parameter=config.output.material.parameter_bindings.get(proc_def.suffix, ""),
                 import_settings=import_settings_dict,
-                srgb=output_def.srgb,
+                srgb=proc_def.srgb,
             ))
 
         except Exception as e:
-            result.errors.append(f"处理 {output_def.output_name} 失败: {e}")
+            result.errors.append(f"处理 {proc_def.name} 失败: {e}")
 
     return result

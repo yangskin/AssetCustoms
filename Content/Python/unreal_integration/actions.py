@@ -92,7 +92,7 @@ class AssetCustomsActions:
             category = os.path.splitext(os.path.basename(preset_path))[0]
 
             # 当 target_path_template 为空时，必须有有效内容浏览器目录
-            if not ctx.profile.target_path_template:
+            if not ctx.profile.output.target_path_template:
                 cp = ctx.content_path
                 if not cp or cp == "/Game" or not cp.startswith("/Game/"):
                     unreal.log_error(
@@ -130,7 +130,7 @@ class AssetCustomsActions:
             "[AssetCustoms] ImportContext built: "
             f"content_path={ctx.content_path}, profile_path={ctx.profile_path}, "
             f"config_version={ctx.profile.config_version}, "
-            f"outputs={len(ctx.profile.texture_output_definitions)}"
+            f"outputs={len(ctx.profile.processing.texture_definitions)}"
         )
 
         result = run_import_pipeline(

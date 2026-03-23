@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
 
-from core.config.schema import TextureInputRules
+from core.config.schema import TextureInputConfig
 
 
 @dataclass
@@ -104,13 +104,13 @@ def _match_regex(filename: str, pattern: str, ignore_case: bool) -> bool:
 
 def match_textures(
     files: List[str],
-    rules: TextureInputRules,
+    rules: TextureInputConfig,
 ) -> MatchResult:
     """将文件列表按规则匹配到逻辑位。
 
     Args:
         files: 贴图文件路径列表。
-        rules: 来自配置的 TextureInputRules。
+        rules: 来自配置的 TextureInputConfig。
 
     Returns:
         MatchResult，包含映射、候选、孤儿、歧义和未映射信息。
@@ -170,7 +170,7 @@ def match_textures(
 
 
 def match_textures_from_disk(
-    rules: TextureInputRules,
+    rules: TextureInputConfig,
     drop_dir: str,
 ) -> MatchResult:
     """便捷函数：从磁盘扫描 + 匹配一步完成。"""

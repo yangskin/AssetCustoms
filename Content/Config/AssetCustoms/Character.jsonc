@@ -1,163 +1,192 @@
 {
-  // === AssetCustoms Character Profile v1.1 ===
-  // 角色资产配置：与 Prop 不同的母材质、落地路径、输出通道组合
+  // === AssetCustoms Character Profile — Config v2.0（三段式管线模型）===
+  // 角色资产配置：SSS 母材质、Characters/{Name} 落地路径、角色贴图通道组合
 
-  "config_version": "1.1",
+  "config_version": "2.0",
 
-  // 角色使用 SSS 母材质
-  "default_master_material_path": "/Game/MyProject/Materials/Masters/MM_Character_SSS.MM_Character_SSS",
-
-  "default_fallback_import_path": "/Game/AIGC_Dropoff",
-
-  // 角色按 Characters/{Name} 分桶
-  "target_path_template": "/Game/Characters/{Name}",
-
-  "conflict_policy": "version",
-
-  "asset_naming_template": {
-    "static_mesh": "SK_{Name}",
-    "material_instance": "MI_{Name}_Char",
-    "texture": "T_{Name}_{Suffix}"
-  },
-
-  // 资产子目录（角色配置不分子目录，全部放在同一目录）
-  "asset_subdirectories": {
-    "static_mesh": "",
-    "material_instance": "",
-    "texture": ""
-  },
-
-  "texture_input_rules": {
-    "match_mode": "glob",
-    "ignore_case": true,
-    "extensions": [".png", ".tga", ".jpg", ".jpeg", ".exr", ".tif", ".tiff"],
-    "search_roots": [
-      "{DropDir}",
-      "{DropDir}/Textures",
-      "{DropDir}/Maps"
-    ],
-    "rules": {
-      "BaseColor":        { "priority": 10, "patterns": ["*_BC.*", "*_BC_*", "*_BaseColor.*", "*_BaseColor_*", "*_Diffuse.*", "*_Diffuse_*", "*_Albedo.*", "*_Albedo_*"] },
-      "Normal":           { "priority": 10, "patterns": ["*_N.*", "*_N_*", "*_Normal.*", "*_Normal_*", "*_Nrm.*", "*_Nrm_*"] },
-      "Roughness":        { "priority": 9,  "patterns": ["*_R.*", "*_R_*", "*_Rough.*", "*_Rough_*", "*_Roughness.*", "*_Roughness_*"] },
-      "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
-      "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
-      "SubsurfaceColor":  { "priority": 8,  "patterns": ["*_SSS.*", "*_SSS_*", "*_Subsurface.*", "*_Subsurface_*"] },
-      "Opacity":          { "priority": 7,  "patterns": ["*_O.*", "*_O_*", "*_Opacity.*", "*_Opacity_*", "*_Alpha.*", "*_Alpha_*"] }
-    }
-  },
-
-  "texture_output_definitions": [
-    {
-      "enabled": true,
-      "output_name": "Diffuse",
-      "suffix": "D",
-      "category": "Character",
-      "srgb": true,
-      "file_format": "PNG",
-      "bit_depth": 8,
-      "mips": true,
-      "resize": null,
-      "alpha_premultiplied": false,
-      "material_parameter": "BaseColor_Texture",
-      "channels": {
-        "R": { "from": "BaseColor", "ch": "R" },
-        "G": { "from": "BaseColor", "ch": "G" },
-        "B": { "from": "BaseColor", "ch": "B" },
-        "A": { "from": "Opacity", "ch": "R", "constant": 1.0 }
-      },
-      "import_settings": {
-        "compression": "TC_Default",
-        "lod_group": "TEXTUREGROUP_Character",
-        "virtual_texture": false,
-        "address_x": "Wrap",
-        "address_y": "Wrap",
-        "mip_gen": "FromTextureGroup"
-      }
-    },
-
-    {
-      "enabled": true,
-      "output_name": "Normal",
-      "suffix": "N",
-      "category": "Character",
-      "srgb": false,
-      "file_format": "PNG",
-      "bit_depth": 8,
-      "mips": true,
-      "material_parameter": "Normal_Texture",
-      "normal_space": "OpenGL",
-      "flip_green": true,
-      "channels": {
-        "R": { "from": "Normal", "ch": "R" },
-        "G": { "from": "Normal", "ch": "G" },
-        "B": { "from": "Normal", "ch": "B" },
-        "A": { "constant": 1.0 }
-      },
-      "import_settings": {
-        "compression": "TC_Normalmap",
-        "lod_group": "TEXTUREGROUP_CharacterNormalMap",
-        "virtual_texture": false,
-        "address_x": "Wrap",
-        "address_y": "Wrap",
-        "mip_gen": "FromTextureGroup"
-      }
-    },
-
-    {
-      // 金属/粗糙/AO 打包
-      "enabled": true,
-      "output_name": "Packed_MRO",
-      "suffix": "MRO",
-      "category": "Character",
-      "srgb": false,
-      "file_format": "PNG",
-      "bit_depth": 8,
-      "mips": true,
-      "material_parameter": "Packed_Texture",
-      "allow_missing": true,
-      "channels": {
-        "R": { "from": "Metallic",         "ch": "R", "constant": 0.0 },
-        "G": { "from": "Roughness",        "ch": "R", "constant": 0.4 },
-        "B": { "from": "AmbientOcclusion", "ch": "R", "constant": 1.0 },
-        "A": { "constant": 1.0 }
-      },
-      "import_settings": {
-        "compression": "TC_Masks",
-        "lod_group": "TEXTUREGROUP_Character",
-        "virtual_texture": false,
-        "address_x": "Wrap",
-        "address_y": "Wrap",
-        "mip_gen": "FromTextureGroup"
-      }
-    },
-
-    {
-      // 角色特有：次表面颜色贴图
-      "enabled": true,
-      "output_name": "SubsurfaceColor",
-      "suffix": "SSS",
-      "category": "Character",
-      "srgb": true,
-      "file_format": "PNG",
-      "bit_depth": 8,
-      "mips": true,
-      "material_parameter": "SubsurfaceColor_Texture",
-      "allow_missing": true,
-      "channels": {
-        "R": { "from": "SubsurfaceColor", "ch": "R", "constant": 0.8 },
-        "G": { "from": "SubsurfaceColor", "ch": "G", "constant": 0.3 },
-        "B": { "from": "SubsurfaceColor", "ch": "B", "constant": 0.2 },
-        "A": { "constant": 1.0 }
-      },
-      "import_settings": {
-        "compression": "TC_Default",
-        "lod_group": "TEXTUREGROUP_Character",
-        "virtual_texture": false,
-        "address_x": "Wrap",
-        "address_y": "Wrap",
-        "mip_gen": "FromTextureGroup"
+  // =====================================================================
+  // 阶段一：传入（Input）
+  // =====================================================================
+  "input": {
+    "texture": {
+      "match_mode": "glob",
+      "ignore_case": true,
+      "extensions": [".png", ".tga", ".jpg", ".jpeg", ".exr", ".tif", ".tiff"],
+      "search_roots": [
+        "{DropDir}",
+        "{DropDir}/Textures",
+        "{DropDir}/Maps"
+      ],
+      "rules": {
+        "BaseColor":        { "priority": 10, "patterns": ["*_BC.*", "*_BC_*", "*_BaseColor.*", "*_BaseColor_*", "*_Diffuse.*", "*_Diffuse_*", "*_Albedo.*", "*_Albedo_*"] },
+        "Normal":           { "priority": 10, "patterns": ["*_N.*", "*_N_*", "*_Normal.*", "*_Normal_*", "*_Nrm.*", "*_Nrm_*"] },
+        "Roughness":        { "priority": 9,  "patterns": ["*_R.*", "*_R_*", "*_Rough.*", "*_Rough_*", "*_Roughness.*", "*_Roughness_*"] },
+        "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
+        "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
+        "SubsurfaceColor":  { "priority": 8,  "patterns": ["*_SSS.*", "*_SSS_*", "*_Subsurface.*", "*_Subsurface_*"] },
+        "Opacity":          { "priority": 7,  "patterns": ["*_O.*", "*_O_*", "*_Opacity.*", "*_Opacity_*", "*_Alpha.*", "*_Alpha_*"] }
       }
     }
-  ]
+  },
+
+  // =====================================================================
+  // 阶段二：处理（Processing）
+  // =====================================================================
+  "processing": {
+    "conflict_policy": "version",
+
+    // ── 模型导入设置（ADR-0003）──
+    "mesh_import": {
+      "import_uniform_scale": 1.0,
+      "import_as_skeletal": false,
+      "normal_import_method": "ImportNormalsAndTangents",
+      "normal_generation_method": "MikkTSpace",
+      "compute_weighted_normals": true,
+      "vertex_color_import_option": "Ignore",
+      "import_animations": false,
+      "auto_generate_collision": false,
+      "combine_meshes": false,
+      "remove_degenerates": true,
+      "build_nanite": false,
+      "build_reversed_index_buffer": true,
+      "generate_lightmap_u_vs": false,
+      "convert_scene": true,
+      "convert_scene_unit": true,
+      "force_front_x_axis": false,
+      "import_mesh_lods": false,
+      "static_mesh_lod_group": "None",
+      "import_materials": true,
+      "import_textures": true,
+      "reorder_material_to_fbx_order": true,
+
+      // ── SkeletalMesh 专有（仅 import_as_skeletal=true 时生效）──
+      "skeleton_path": "",
+      "create_physics_asset": true,
+      "import_morph_targets": true,
+      "import_meshes_in_bone_hierarchy": true,
+      "update_skeleton_reference_pose": false,
+      "use_t0_as_ref_pose": false,
+      "preserve_smoothing_groups": true,
+      "import_content_type": "All"
+    },
+
+    "texture_definitions": [
+      {
+        // --- 漫反射（含 Opacity Alpha）---
+        "enabled": true,
+        "name": "Diffuse",
+        "suffix": "D",
+        "category": "Character",
+        "channels": {
+          "R": { "from": "BaseColor", "ch": "R" },
+          "G": { "from": "BaseColor", "ch": "G" },
+          "B": { "from": "BaseColor", "ch": "B" },
+          "A": { "from": "Opacity", "ch": "R", "constant": 1.0 }
+        },
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": true,
+        "mips": true
+      },
+      {
+        // --- 法线 ---
+        "enabled": true,
+        "name": "Normal",
+        "suffix": "N",
+        "category": "Character",
+        "channels": {
+          "R": { "from": "Normal", "ch": "R" },
+          "G": { "from": "Normal", "ch": "G" },
+          "B": { "from": "Normal", "ch": "B" },
+          "A": { "constant": 1.0 }
+        },
+        "flip_green": true,
+        "normal_space": "OpenGL",
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": false,
+        "mips": true
+      },
+      {
+        // --- 金属/粗糙/AO 打包（MRO）---
+        "enabled": true,
+        "name": "Packed_MRO",
+        "suffix": "MRO",
+        "category": "Character",
+        "channels": {
+          "R": { "from": "Metallic",         "ch": "R", "constant": 0.0 },
+          "G": { "from": "Roughness",        "ch": "R", "constant": 0.4 },
+          "B": { "from": "AmbientOcclusion", "ch": "R", "constant": 1.0 },
+          "A": { "constant": 1.0 }
+        },
+        "allow_missing": true,
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": false,
+        "mips": true
+      },
+      {
+        // --- 次表面颜色（角色特有）---
+        "enabled": true,
+        "name": "SubsurfaceColor",
+        "suffix": "SSS",
+        "category": "Character",
+        "channels": {
+          "R": { "from": "SubsurfaceColor", "ch": "R", "constant": 0.8 },
+          "G": { "from": "SubsurfaceColor", "ch": "G", "constant": 0.3 },
+          "B": { "from": "SubsurfaceColor", "ch": "B", "constant": 0.2 },
+          "A": { "constant": 1.0 }
+        },
+        "allow_missing": true,
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": true,
+        "mips": true
+      }
+    ]
+  },
+
+  // =====================================================================
+  // 阶段三：交付（Output）
+  // =====================================================================
+  "output": {
+    "target_path_template": "/Game/Characters/{Name}",
+    "fallback_path": "/Game/AIGC_Dropoff",
+
+    "subdirectories": {
+      "static_mesh": "",
+      "material_instance": "",
+      "texture": ""
+    },
+
+    "naming": {
+      "static_mesh": "SK_{Name}",
+      "material_instance": "MI_{Name}_Char",
+      "texture": "T_{Name}_{Suffix}"
+    },
+
+    "material": {
+      "master_material_path": "/Game/MyProject/Materials/Masters/MM_Character_SSS.MM_Character_SSS",
+      "parameter_bindings": {
+        "D":   "BaseColor_Texture",
+        "N":   "Normal_Texture",
+        "MRO": "Packed_Texture",
+        "SSS": "SubsurfaceColor_Texture"
+      }
+    },
+
+    "texture_import_defaults": {
+      "compression": "TC_Default",
+      "lod_group": "TEXTUREGROUP_Character",
+      "virtual_texture": false,
+      "address_x": "Wrap",
+      "address_y": "Wrap",
+      "mip_gen": "FromTextureGroup"
+    },
+
+    "texture_import_overrides": {
+      "N":   { "compression": "TC_Normalmap", "lod_group": "TEXTUREGROUP_CharacterNormalMap" },
+      "MRO": { "compression": "TC_Masks" }
+    }
+  }
 }
