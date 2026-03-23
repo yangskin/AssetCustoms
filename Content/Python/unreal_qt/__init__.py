@@ -82,12 +82,21 @@ class widget_manager():
         if widget in cls.widgets:
             return
         cls.widgets.append(widget)
+        # 挂接 destroyed 信号自动移除，防止内存泄漏
+        try:
+            widget.destroyed.connect(lambda: cls._on_destroyed(widget))
+        except Exception:
+            pass
 
     @classmethod
     def remove_widget(cls, widget):
-        print("remove_widget")
         if widget in cls.widgets:
             cls.widgets.remove(widget)
+
+    @classmethod
+    def _on_destroyed(cls, widget):
+        """QWidget 被销毁时自动从列表移除。"""
+        cls.remove_widget(widget)
 
 
 def wrap(widget):
@@ -122,13 +131,14 @@ def parent_orphan_widgets(exclude=None):
         unreal.log_warning(f"parented widget {widget}")
 
 
-__timer = 0
+__timer = 0.0
 
 
 def tick(delta_seconds):
     global __timer
     __timer += delta_seconds
     if __timer >= 0.3:
+        __timer = 0.0
         parent_orphan_widgets()
 
 # Example usage

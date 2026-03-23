@@ -2,9 +2,10 @@
 
 本项目位于 Unreal Engine 插件的 Python 侧，主要用于资源处理与工具自动化，围绕“静默成功，响亮失败”的 UX 模型构建。
 
-> 实现状态（2026-03-22）
-> - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
-> - 进行中：FR4 分诊 UI（PySide6 + unreal_qt 基础设施已就绪，待实现业务窗口）；Config Schema v1.1 剩余字段；M3 质量与体验。
+> 实现状态（2026-03-23）
+> - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR4 分诊 UI ✅（PySide6 TriageWindow + TriageDecision + 8 项单测 + 视觉验证）；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
+> - 已完成：M3 质量与体验 ✅（NFR1 性能预算 + NFR3 健壮性 + NFR4 无配置 UI 禁用）；M4 批处理 ✅；Config Editor GUI（Round 1-5，含多语言支持）。
+> - 健壮性审计（2026-03-23）：修复 7 项问题（tick 定时器、内存泄漏、静默异常、输入校验等），详见「健壮性与稳定性审计」章节。
 > - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
 
 ## 作用域与边界
@@ -214,6 +215,57 @@ unreal_qt.wrap(window)
 
 ### 验证状态
 - ✅ `deploy.ps1` 离线安装通过（Pillow 12.1.1 + PySide6 6.10.2）
+- ✅ `Tests/test_qt_messagebox.py` 在 UE Editor 中成功弹出 QMessageBox
+
+## 健壮性与稳定性审计（2026-03-23）
+
+### 审计范围
+
+对全部核心模块（core/、unreal_integration/、unreal_qt/）进行深度代码审查，聚焦：
+- 异常处理完整性
+- 资源生命周期管理
+- 输入校验覆盖度
+- 性能隐患
+- 静默失败的诊断性
+
+### 已修复问题
+
+| ID | 严重度 | 模块 | 问题 | 修复 |
+|----|--------|------|------|------|
+| H1 | 高 | `unreal_qt/__init__.py` | tick 定时器永不重置：0.3s 后 `parent_orphan_widgets()` 每帧触发，浪费性能 | 触发后重置 `__timer = 0.0` |
+| H2 | 高 | `core/pipeline/standardize.py` | `_load_source_images()` 捕获异常后 `pass`，图片损坏/路径错误完全无日志 | 改为 `logger.warning` 输出 slot、路径、异常信息 |
+| H3 | 高 | `unreal_qt/__init__.py` | `widget_manager` 仅有 `add_widget`，窗口关闭后不自动移除引用 → 内存泄漏 | 挂接 `widget.destroyed` 信号自动调用 `remove_widget` |
+| H4 | 高 | `import_pipeline.py` | `run_import_pipeline()` 不校验 FBX 文件存在性，直接调用 UE 导入 | 添加 `os.path.isfile()` 前置检查 |
+| M1 | 中 | `channel_pack.py` | 重复 `from __future__ import annotations` 语句 | 删除重复行 |
+| M2 | 中 | `core/textures/matcher.py` | `discover_texture_files()` 中 `os.listdir()` 未处理 OSError | 添加 `try/except OSError` 跳过不可访问目录 |
+| M3 | 中 | `core/pipeline/standardize.py` | `_save_image()` EXR 回退为 PNG 时静默改扩展名 | 添加 `logger.warning` 输出回退信息 |
+
+### 现存风险与建议（低优先级，暂不修复）
+
+| 项目 | 描述 | 建议 |
+|------|------|------|
+| JSONC 注释剥离 | `_strip_jsonc` 正则对 `//` 的处理是启发式的，可能误删字符串内的 `//` | 典型配置文件不受影响；如需完美支持可安装 `json5` |
+| 批量分诊递归深度 | `_show_batch_triage` 用递归回调链式弹出窗口，大量失败时可能栈溢出 | 实际场景极少超过 10 个分诊；如需支持大批量可改为迭代式 |
+| 20 项测试跳过 | `test_standardize` 依赖 Pillow 但测试 venv 未安装 | 在 CI/本地测试时执行 `pip install -r requirements-dev.txt` 补全 Pillow |
+| `check_texture_mapping` 孤儿策略 | 存在孤儿贴图时标记为 FAILED，可能过于保守 | 当前行为有助于发现遗漏映射，可视需求降级为 WARNING |
+
+### 已有保护机制（确认完好）
+
+| 层级 | 机制 | 状态 |
+|------|------|------|
+| 管线异常隔离 | `run_import_pipeline` / `resume_after_triage` / `_run_native_embedded_pipeline` 标准化阶段均有 try/except 保护 | ✅ |
+| 隔离区保留 | 任何阶段失败都保留隔离区，不执行破坏性清理 | ✅ |
+| 性能预算 | `_PERF_BUDGET_SECONDS = 5.0`，超时自动 WARNING | ✅ |
+| NFR4 配置校验 | 预设文件不存在时 `os.path.isfile` 拦截并输出诊断信息 | ✅ |
+| 批处理异常隔离 | `run_batch_import` 逐文件 try/except，单个失败不阻塞其余 | ✅ |
+| 分诊 UI 回调保护 | `_show_triage_ui` 顶层 try/except，弹窗失败不崩溃编辑器 | ✅ |
+| 模块分层 | core/ 无 Unreal 依赖，可独立测试；unreal_integration/ 单向依赖 core/ | ✅ |
+| 双路径贴图处理 | numpy 快速路径 + Pillow 纯 Python 回退，无 numpy 不崩溃 | ✅ |
+
+## 参考
+- 路线图：[docs/roadmap.md](./roadmap.md)
+- 需求规格（V1.1）：[./requirements_v1.1.md](./requirements_v1.1.md)
+- 编码规范（Google Python）：[../standards/coding-style.md](../standards/coding-style.md)
 - ✅ `Tests/test_qt_messagebox.py` 在 UE Editor 中成功弹出 QMessageBox
 
 ## 参考

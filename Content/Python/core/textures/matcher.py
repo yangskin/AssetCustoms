@@ -70,7 +70,11 @@ def discover_texture_files(
         else:
             matched_dirs = []
         for root_dir in matched_dirs:
-            for entry in os.listdir(root_dir):
+            try:
+                entries = os.listdir(root_dir)
+            except OSError:
+                continue
+            for entry in entries:
                 full = os.path.join(root_dir, entry)
                 if not os.path.isfile(full):
                     continue

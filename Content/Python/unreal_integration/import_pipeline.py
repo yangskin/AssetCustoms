@@ -655,6 +655,11 @@ def run_import_pipeline(
     result = ImportPipelineResult()
     base_name = extract_base_name(fbx_path)
 
+    # 前置校验：FBX 文件存在性
+    if not os.path.isfile(fbx_path):
+        result.errors.append(f"FBX 文件不存在: {fbx_path}")
+        return result
+
     # --- 阶段 1：计算隔离区路径并导入 ---
     result.phase = "import"
     isolation_path = compute_isolation_path(
@@ -1153,3 +1158,110 @@ def resume_after_triage(
         logger.info("Resume-after-triage stopped at phase '%s' after %.2fs", pipeline_result.phase, elapsed)
 
     return pipeline_result
+
+
+# ---------------------------------------------------------------------------
+# M4: 批处理
+# ---------------------------------------------------------------------------
+
+@dataclass
+class BatchItemResult:
+    """单个 FBX 在批处理中的结果。"""
+    fbx_path: str = ""
+    pipeline_result: Optional[ImportPipelineResult] = None
+    needs_triage: bool = False
+
+
+@dataclass
+class BatchImportResult:
+    """批量导入的汇总结果。"""
+    items: List[BatchItemResult] = field(default_factory=list)
+    total: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    needs_triage: int = 0
+    elapsed: float = 0.0
+
+    @property
+    def summary(self) -> str:
+        parts = [f"批处理完成: {self.total} 个文件"]
+        if self.succeeded:
+            parts.append(f"{self.succeeded} 成功")
+        if self.needs_triage:
+            parts.append(f"{self.needs_triage} 待分诊")
+        if self.failed:
+            parts.append(f"{self.failed} 失败")
+        parts.append(f"耗时 {self.elapsed:.1f}s")
+        return ", ".join(parts)
+
+
+def run_batch_import(
+    fbx_paths: List[str],
+    config: PluginConfig,
+    category: str,
+    current_path: str = "/Game",
+    ops: Optional[UnrealAssetOps] = None,
+    on_progress: Optional[Callable[[int, int, str], None]] = None,
+) -> BatchImportResult:
+    """批量执行导入管道。
+
+    逐个处理 FBX 文件，检查失败的文件标记为 needs_triage，
+    不阻塞后续文件的处理。
+
+    Args:
+        fbx_paths: FBX 文件路径列表。
+        config: Profile 配置。
+        category: Profile 类别。
+        current_path: Content Browser 路径。
+        ops: UE 资产操作接口。
+        on_progress: 进度回调 (current_index, total, fbx_filename)。
+
+    Returns:
+        BatchImportResult 汇总。
+    """
+    if ops is None:
+        ops = UnrealAssetOps()
+
+    t_start = time.monotonic()
+    batch = BatchImportResult(total=len(fbx_paths))
+
+    for idx, fbx_path in enumerate(fbx_paths):
+        filename = os.path.basename(fbx_path)
+        logger.info("Batch [%d/%d]: %s", idx + 1, batch.total, filename)
+
+        if on_progress:
+            try:
+                on_progress(idx + 1, batch.total, filename)
+            except Exception:
+                pass
+
+        item = BatchItemResult(fbx_path=fbx_path)
+        try:
+            result = run_import_pipeline(
+                fbx_path=fbx_path,
+                config=config,
+                category=category,
+                current_path=current_path,
+                ops=ops,
+            )
+            item.pipeline_result = result
+
+            if result.success:
+                batch.succeeded += 1
+            elif result.check_result and not result.check_result.passed:
+                item.needs_triage = True
+                batch.needs_triage += 1
+            else:
+                batch.failed += 1
+        except Exception as e:
+            logger.error("Batch [%d/%d] unexpected error: %s", idx + 1, batch.total, e)
+            item.pipeline_result = ImportPipelineResult(
+                errors=[f"批处理异常: {e}"],
+            )
+            batch.failed += 1
+
+        batch.items.append(item)
+
+    batch.elapsed = time.monotonic() - t_start
+    logger.info(batch.summary)
+    return batch

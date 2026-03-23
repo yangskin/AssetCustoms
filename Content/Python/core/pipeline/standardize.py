@@ -15,6 +15,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from core.config.schema import PluginConfig, TextureOutputDef
 from core.textures.channel_pack import pack_channels
 
+import logging
+
+logger = logging.getLogger("AssetCustoms")
+
 try:
     from PIL import Image  # type: ignore
 except Exception:
@@ -60,8 +64,8 @@ def _load_source_images(
     for slot, path in mapping.items():
         try:
             sources[slot] = Image.open(path).convert("RGBA")
-        except Exception:
-            pass  # 缺失的源在 channel_pack 中会用 constant 兜底
+        except Exception as e:
+            logger.warning("Failed to load source image for slot '%s': %s — %s", slot, path, e)
     return sources
 
 
@@ -121,6 +125,7 @@ def _save_image(
         try:
             img.save(path, format="EXR")
         except Exception:
+            logger.warning("EXR 保存失败，回退为 PNG: %s", path)
             path = path.replace(".exr", ".png")
             img.save(path, format="PNG")
     else:

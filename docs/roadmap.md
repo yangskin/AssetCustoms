@@ -1,6 +1,6 @@
 # 路线图 / 里程碑（V1.1）
 
-版本: V1.1（Config v1.1）  |  状态: 需求已确认  |  负责人: （您的名字/TA团队）  |  最后更新: 2025-11-11
+版本: V1.1（Config v1.1）  |  状态: M4 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-23
 
 本文件用于跟踪项目阶段性目标与关键里程碑，确保对齐产品价值与技术落地节奏。
 
@@ -91,9 +91,22 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 		- [x] `ui.py`：无配置占位项改为"⚠ 配置缺失 (Config Missing)" + Icons.Error + log_error
 		- [x] `actions.py`：`on_pick_fbx_with_preset()` 添加 `os.path.isfile` 前置检查
 
-## M4 — 集成与扩展
-- [ ] 批处理/CI 集成（可选）
-- [ ] 配置 Schema 扩展与向后兼容策略
+## M4 — 批处理 ✅（已完成 2026-03-23）
+- [x] 批量 FBX 导入：文件对话框多选 → 逐个执行管线 → 汇总结果
+- [x] 分诊排队：检查失败的文件缓存结果，批处理结束后逐个弹出分诊 UI
+
+## 健壮性审计 ✅（2026-03-23）
+- [x] 深度代码审查：core/、unreal_integration/、unreal_qt/ 全量审计
+- [x] 修复 7 项问题（4 高 + 3 中）：
+  - [x] H1: `unreal_qt` tick 定时器不重置 → 每帧运行 parent_orphan_widgets
+  - [x] H2: `_load_source_images` 静默吞异常 → 图片损坏无法诊断
+  - [x] H3: `widget_manager` 无自动清理 → 窗口关闭后内存泄漏
+  - [x] H4: `run_import_pipeline` 不校验 FBX 文件存在性
+  - [x] M1: `channel_pack.py` 重复 import 语句
+  - [x] M2: `discover_texture_files` 不可访问目录无保护
+  - [x] M3: `_save_image` EXR 回退静默改扩展名
+- [x] 确认已有保护机制完好（管线异常隔离、隔离区保留、性能预算、批处理隔离等）
+- [x] 文档同步：architecture.md 新增审计章节、testing.md 更新测试状态、roadmap.md 更新
 
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。

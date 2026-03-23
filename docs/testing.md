@@ -47,6 +47,14 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
 - 若提示 `pytest 未安装`：请确认已执行依赖安装命令。
 - 若导入路径报错：测试已自动将 `Content/Python` 加到 `sys.path`，通常无需手动设置。
 
-## 测试状态（2025-11-11）
+## 测试状态（2026-03-23）
 - 环境：Windows / Python 3.11.8 / pytest 8.4.2
-- 结果：6 项测试全部通过（core.config 与 core.textures.layer_merge）
+- 结果：86 passed, 20 skipped（共 106 项用例）
+- 跳过原因：20 项 `test_standardize` 依赖 Pillow（测试环境未安装时自动跳过）
+- 覆盖范围：
+  - 配置解析（JSONC / Schema v1.1 / loader）
+  - 贴图引擎（layer_merge / channel_pack / matcher）
+  - 命名解析（resolve_names / extract_base_name / conflict / isolation_path）
+  - 检查链（check_chain: asset_count / master_material / texture_mapping）
+  - 标准化引擎（process_textures / flip_green / resize）
+  - 分诊 UI（TriageWindow / TriageDecision / 回调）
