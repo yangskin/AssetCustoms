@@ -30,7 +30,7 @@
   - 仅在检查失败时弹出；展示失败原因、已识别结果；对未映射槽提供下拉选择；支持 Base_Name 确认；触发执行。
 - 模块 E：标准化执行引擎（FR5）
   - 贴图处理（Pillow）：通道编排、常量/反相/remap、normal G 反转、可选缩放、格式/位深保存。
-  - 资产重命名与移动：根据 target_path_template、asset_naming_template、conflict_policy 实施。
+  - 资产重命名与移动：根据 target_path_template、asset_naming_template、conflict_policy 实施；按 asset_subdirectories 将 SM/MI/贴图分别放入对应子目录。
   - 材质实例创建与链接：父材质=default_master_material_path，参数按定义自动绑定。
   - 资产链接与清理：SM 绑定 MI；清理隔离区；应用导入设置（压缩、LOD 组、sRGB、VT 等）。
 
@@ -121,6 +121,7 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
 - 标准化引擎（FR5）
   - 输入：映射、Selected_Profile、Base_Name、隔离区路径。
   - 输出：最终路径中的标准化资产（SM/Textures/MIC）；导入设置已应用。
+  - **资产子目录**：若配置了 `asset_subdirectories`，SM/MI/贴图分别移入对应子目录（如 `Materials/`、`Textures/`）；字段为空则放在 `target_path` 根目录（向后兼容）。
   - 错误：任何步骤失败 -> 停止、记录日志、保留隔离区（NFR3）。
 
 ## 性能与扩展
@@ -272,6 +273,27 @@ unreal_qt.wrap(window)
 - 路线图：[docs/roadmap.md](./roadmap.md)
 - 需求规格（V1.1）：[./requirements_v1.1.md](./requirements_v1.1.md)
 - 编码规范（Google Python）：[../standards/coding-style.md](../standards/coding-style.md)
+
+## Config v2.0 三段式管线模型（设计已确认）
+
+> 详见 [ADR-0002](./decisions/ADR-0002-config-v2-pipeline-model.md)
+
+v1.1 的扁平配置结构存在"处理定义"与"交付设置"混杂的问题（`TextureOutputDef` 同时包含 Pillow 通道编排和 UE 导入设置）。v2.0 将配置重构为三段式嵌套：
+
+```
+input/          → 识别"什么进来"（贴图匹配规则）
+processing/     → 决定"怎么处理"（命名、冲突策略、Pillow 通道编排与格式）
+output/         → 描述"怎么交付"（目标路径、子目录、UE 导入设置）
+```
+
+**对模块边界的影响**：
+- `core/config/schema.py`：`PluginConfig` 拆分为 `InputConfig` + `ProcessingConfig` + `OutputConfig`。
+- `core/config/loader.py`：适配嵌套 JSONC 解析。
+- `core/naming.py`、`unreal_integration/import_pipeline.py`、`standardize.py`：字段访问路径更新（如 `config.processing.conflict_policy`）。
+- `config_editor.py`：Tab 重构为 Input / Processing / Output。
+- 删除废弃字段：`texture_merge`、`allowed_modes`（v1.0 遗留，v1.1 已废弃）。
+
+**不变的约束**：依赖方向（`unreal_integration -> core`）、异常隔离策略、隔离区保留策略均不受影响。
 
 ## 模块拆分与边界（v1.1）
 

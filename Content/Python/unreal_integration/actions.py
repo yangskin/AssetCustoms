@@ -91,6 +91,29 @@ class AssetCustomsActions:
             ctx = build_import_context(fbx_path=paths[0], profile_path=preset_path)
             category = os.path.splitext(os.path.basename(preset_path))[0]
 
+            # 当 target_path_template 为空时，必须有有效内容浏览器目录
+            if not ctx.profile.target_path_template:
+                cp = ctx.content_path
+                if not cp or cp == "/Game" or not cp.startswith("/Game/"):
+                    unreal.log_error(
+                        "[AssetCustoms] 目标路径模板为空，且未在内容浏览器中选择有效目录。\n"
+                        "请先在内容浏览器中选择一个目标目录，再执行导入。"
+                    )
+                    try:
+                        from unreal_qt import widget_manager as wm
+                        wm.ensure_app()
+                        from PySide6 import QtWidgets
+                        QtWidgets.QMessageBox.warning(
+                            None,
+                            "AssetCustoms",
+                            "目标路径模板为空，请先在内容浏览器中选中一个目录再导入。\n\n"
+                            "Target path template is empty. Please select a folder "
+                            "in Content Browser before importing.",
+                        )
+                    except Exception:
+                        pass
+                    return
+
             if len(paths) == 1:
                 self._run_single_import(paths[0], ctx, category)
             else:

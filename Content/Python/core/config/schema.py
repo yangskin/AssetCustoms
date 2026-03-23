@@ -18,6 +18,14 @@ class TextureMergeDefaults:
 # ---------------------------------------------------------------------------
 
 @dataclass
+class AssetSubdirectories:
+    """可选的资产类型子目录映射。空字符串表示放在 target_path 根目录。"""
+    static_mesh: str = ""
+    material_instance: str = ""
+    texture: str = ""
+
+
+@dataclass
 class AssetNamingTemplate:
     static_mesh: str = "SM_{Name}"
     material_instance: str = "MI_{Name}"
@@ -101,6 +109,8 @@ class PluginConfig:
 
     # 资产命名模板
     asset_naming_template: AssetNamingTemplate = field(default_factory=AssetNamingTemplate)
+    # 资产子目录（可选，空字符串=不分子目录）
+    asset_subdirectories: AssetSubdirectories = field(default_factory=AssetSubdirectories)
     # 贴图输入识别规则
     texture_input_rules: TextureInputRules = field(default_factory=TextureInputRules)
     # 输出贴图定义列表

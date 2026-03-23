@@ -196,7 +196,7 @@ def test_load_real_prop_jsonc():
     cfg = load_config(prop_path)
     assert cfg.config_version == "1.1"
     assert cfg.conflict_policy == "version"
-    assert cfg.target_path_template == "/Game/Assets/{Category}/{Name}"
+    assert cfg.target_path_template == ""
     assert len(cfg.texture_output_definitions) >= 4
     # MRO 打包项
     mro = [d for d in cfg.texture_output_definitions if d.suffix == "MRO"]

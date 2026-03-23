@@ -557,6 +557,7 @@ def _run_native_embedded_pipeline(
     # 6-10: UE 资产操作（NFR3: try/except 保护，失败时保留隔离区）
     try:
         # 6. 重命名 + 移动嵌入贴图
+        tex_base = names.texture_base_path or final_target
         processed_textures: List[ProcessedTexture] = []
         for slot, ue_tex_path in slot_mapping.items():
             output_def = _find_output_for_slot(config, slot)
@@ -566,7 +567,7 @@ def _run_native_embedded_pipeline(
             new_name = names.texture_names.get(output_def.suffix)
             if new_name is None:
                 continue
-            new_path = f"{final_target}/{new_name}"
+            new_path = f"{tex_base}/{new_name}"
             ops.rename_asset(ue_tex_path, new_path)
             logger.info("Renamed texture: %s → %s", ue_tex_path, new_path)
 
@@ -592,15 +593,15 @@ def _run_native_embedded_pipeline(
 
         # 7. 移动 StaticMesh
         sm_src = f"{isolation_path}/{static_mesh_name}"
-        sm_dst = f"{final_target}/{names.static_mesh}"
+        sm_dst = names.sm_path or f"{final_target}/{names.static_mesh}"
         ops.rename_asset(sm_src, sm_dst)
         logger.info("Moved StaticMesh: %s → %s", sm_src, sm_dst)
 
         # 8. 创建 MI 并链接贴图
         mi = None
         if config.default_master_material_path:
-            mi_path = f"{final_target}/{names.material_instance}"
-            mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+            mi_dst = names.mi_path or f"{final_target}/{names.material_instance}"
+            mi = ops.create_material_instance(mi_dst, config.default_master_material_path)
             if mi:
                 for pt in processed_textures:
                     if pt.material_parameter:
@@ -609,7 +610,7 @@ def _run_native_embedded_pipeline(
 
         # 9. 绑定 SM → MI
         if mi:
-            ops.set_static_mesh_material(sm_dst, f"{final_target}/{names.material_instance}")
+            ops.set_static_mesh_material(sm_dst, mi_dst)
 
         # 10. 清理隔离区
         ops.delete_directory(isolation_path)
@@ -870,11 +871,15 @@ def run_import_pipeline(
                 result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
                 return result
 
+            # 子目录路径
+            tex_base = names.texture_base_path or final_target
+            sm_dst_path = names.sm_path or f"{final_target}/{names.static_mesh}"
+            mi_dst_path = names.mi_path or f"{final_target}/{names.material_instance}"
+
             # 移动 StaticMesh
             if check_result.static_mesh:
                 sm_src = f"{isolation_path}/{check_result.static_mesh}"
-                sm_dst = f"{final_target}/{names.static_mesh}"
-                ops.rename_asset(sm_src, sm_dst)
+                ops.rename_asset(sm_src, sm_dst_path)
 
             # 5.5 处理直接嵌入贴图（重命名 + 移动 + 应用导入设置）
             all_processed: List[ProcessedTexture] = []
@@ -882,7 +887,7 @@ def run_import_pipeline(
                 tex_name = names.texture_names.get(suffix)
                 if not tex_name:
                     continue
-                new_path = f"{final_target}/{tex_name}"
+                new_path = f"{tex_base}/{tex_name}"
                 ops.rename_asset(ue_tex_path, new_path)
                 imp = output_def.import_settings
                 settings = {
@@ -904,7 +909,7 @@ def run_import_pipeline(
 
             # 5.6 导入 Pillow 标准化贴图为 UE 资产
             for proc_tex in std_result.textures:
-                imported_path = ops.import_texture_file(proc_tex.file_path, final_target)
+                imported_path = ops.import_texture_file(proc_tex.file_path, tex_base)
                 if imported_path:
                     logger.info("Imported texture: %s → %s", proc_tex.file_path, imported_path)
                 else:
@@ -916,12 +921,11 @@ def run_import_pipeline(
             # 5.7 MIC 创建
             mi = None
             if config.default_master_material_path:
-                mi_path = f"{final_target}/{names.material_instance}"
-                mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+                mi = ops.create_material_instance(mi_dst_path, config.default_master_material_path)
 
                 for proc_tex in all_processed:
                     tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
-                    tex_ue_path = f"{final_target}/{tex_ue_name}"
+                    tex_ue_path = f"{tex_base}/{tex_ue_name}"
                     if mi and proc_tex.material_parameter:
                         ops.set_material_texture_param(mi, proc_tex.material_parameter, tex_ue_path)
                     # Pillow 输出需应用导入设置；直接输出已在 5.5 中应用
@@ -930,9 +934,7 @@ def run_import_pipeline(
 
             # 5.8 绑定 SM → MI
             if mi and check_result.static_mesh:
-                sm_dst = f"{final_target}/{names.static_mesh}"
-                mi_path = f"{final_target}/{names.material_instance}"
-                ops.set_static_mesh_material(sm_dst, mi_path)
+                ops.set_static_mesh_material(sm_dst_path, mi_dst_path)
 
             # 5.9 清理隔离区
             ops.delete_directory(isolation_path)
@@ -1075,11 +1077,15 @@ def resume_after_triage(
                 pipeline_result.errors.append(f"目标路径已存在且策略为 skip: {target_path}")
                 return pipeline_result
 
+            # 子目录路径
+            tex_base = names.texture_base_path or final_target
+            sm_dst_path = names.sm_path or f"{final_target}/{names.static_mesh}"
+            mi_dst_path = names.mi_path or f"{final_target}/{names.material_instance}"
+
             # 移动 StaticMesh
             if check_result.static_mesh:
                 sm_src = f"{isolation_path}/{check_result.static_mesh}"
-                sm_dst = f"{final_target}/{names.static_mesh}"
-                ops.rename_asset(sm_src, sm_dst)
+                ops.rename_asset(sm_src, sm_dst_path)
 
             # 5.5 直接嵌入贴图
             all_processed: List[ProcessedTexture] = []
@@ -1087,7 +1093,7 @@ def resume_after_triage(
                 tex_name = names.texture_names.get(suffix)
                 if not tex_name:
                     continue
-                new_path = f"{final_target}/{tex_name}"
+                new_path = f"{tex_base}/{tex_name}"
                 ops.rename_asset(ue_tex_path, new_path)
                 imp = output_def.import_settings
                 settings = {
@@ -1108,7 +1114,7 @@ def resume_after_triage(
 
             # 5.6 导入 Pillow 贴图
             for proc_tex in std_result.textures:
-                ops.import_texture_file(proc_tex.file_path, final_target)
+                ops.import_texture_file(proc_tex.file_path, tex_base)
 
             all_processed.extend(std_result.textures)
             pipeline_result.standardize_result = StandardizeResult(textures=all_processed)
@@ -1116,12 +1122,11 @@ def resume_after_triage(
             # 5.7 MIC 创建
             mi = None
             if config.default_master_material_path:
-                mi_path = f"{final_target}/{names.material_instance}"
-                mi = ops.create_material_instance(mi_path, config.default_master_material_path)
+                mi = ops.create_material_instance(mi_dst_path, config.default_master_material_path)
 
                 for proc_tex in all_processed:
                     tex_ue_name = os.path.splitext(os.path.basename(proc_tex.file_path))[0]
-                    tex_ue_path = f"{final_target}/{tex_ue_name}"
+                    tex_ue_path = f"{tex_base}/{tex_ue_name}"
                     if mi and proc_tex.material_parameter:
                         ops.set_material_texture_param(mi, proc_tex.material_parameter, tex_ue_path)
                     if proc_tex.suffix not in direct_suffixes:
@@ -1129,9 +1134,7 @@ def resume_after_triage(
 
             # 5.8 绑定 SM → MI
             if mi and check_result.static_mesh:
-                sm_dst = f"{final_target}/{names.static_mesh}"
-                mi_path = f"{final_target}/{names.material_instance}"
-                ops.set_static_mesh_material(sm_dst, mi_path)
+                ops.set_static_mesh_material(sm_dst_path, mi_dst_path)
 
             # 5.9 清理隔离区
             ops.delete_directory(isolation_path)

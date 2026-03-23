@@ -20,6 +20,13 @@
     "texture": "T_{Name}_{Suffix}"
   },
 
+  // 资产子目录（角色配置不分子目录，全部放在同一目录）
+  "asset_subdirectories": {
+    "static_mesh": "",
+    "material_instance": "",
+    "texture": ""
+  },
+
   "texture_input_rules": {
     "match_mode": "glob",
     "ignore_case": true,

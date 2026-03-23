@@ -48,6 +48,9 @@ def _dict_to_jsonc(data: dict) -> str:
         elif line.startswith('  "asset_naming_template"'):
             result.append("")
             result.append("  // 资产命名模板（仅影响导入后的 UE 资产名）")
+        elif line.startswith('  "asset_subdirectories"'):
+            result.append("")
+            result.append("  // 资产子目录（空字符串 = 放在 target_path 根目录）")
         elif line.startswith('  "texture_input_rules"'):
             result.append("")
             result.append("  // === 输入识别规则（从投放目录匹配文件到逻辑位） ===")
@@ -115,8 +118,10 @@ _TR: dict[str, dict[str, str]] = {
     "fallback_path":         {"en": "Fallback Import Path", "zh": "回退导入路径"},
     "fallback_path_tip":     {"en": "Fallback path when target calculation fails", "zh": "目标路径计算失败时的回退路径"},
     "target_tpl":            {"en": "Target Path Template", "zh": "目标路径模板"},
-    "target_tpl_tip":        {"en": "Asset directory template, supports {Category}, {Name}",
-                              "zh": "资产落地目录模板，支持 {Category}, {Name}"},
+    "target_tpl_tip":        {"en": "Asset directory template, supports {Category}, {Name}. Empty = use Content Browser selected directory.",
+                              "zh": "资产落地目录模板，支持 {Category}, {Name}。留空 = 使用内容浏览器当前选中目录。"},
+    "target_tpl_ph":         {"en": "Empty = Content Browser dir. e.g. /Game/Assets/{Category}/{Name}",
+                              "zh": "留空 = 内容浏览器目录。示例: /Game/Assets/{Category}/{Name}"},
     "conflict":              {"en": "Conflict Policy", "zh": "冲突策略"},
     "conflict_tip":          {"en": "Naming conflict policy", "zh": "命名冲突策略"},
     "grp_naming":            {"en": "Asset Naming Templates", "zh": "资产命名模板"},
@@ -126,6 +131,21 @@ _TR: dict[str, dict[str, str]] = {
     "nm_mi_tip":             {"en": "Material instance naming template", "zh": "材质实例命名模板"},
     "nm_tex":                {"en": "Texture", "zh": "贴图"},
     "nm_tex_tip":            {"en": "Texture naming template", "zh": "贴图命名模板"},
+    "grp_subdirs":            {"en": "Asset Subdirectories", "zh": "资产子目录"},
+    "subdir_mode":            {"en": "Layout Mode", "zh": "布局模式"},
+    "subdir_mode_tip":        {"en": "Aggregated: all in one folder; Separate: split into subdirectories",
+                               "zh": "聚合：全部放同一目录；独立文件夹：按类型分子目录"},
+    "subdir_aggregated":      {"en": "Aggregated (all in root)", "zh": "聚合（全放根目录）"},
+    "subdir_separate":        {"en": "Separate Folders", "zh": "独立文件夹"},
+    "subdir_sm":              {"en": "Static Mesh Subdir", "zh": "静态网格子目录"},
+    "subdir_sm_tip":          {"en": "Subdirectory for static mesh (empty = root)",
+                               "zh": "静态网格子目录（空 = 放在根目录）"},
+    "subdir_mi":              {"en": "Material Instance Subdir", "zh": "材质实例子目录"},
+    "subdir_mi_tip":          {"en": "Subdirectory for material instances (empty = root)",
+                               "zh": "材质实例子目录（空 = 放在根目录）"},
+    "subdir_tex":             {"en": "Texture Subdir", "zh": "贴图子目录"},
+    "subdir_tex_tip":         {"en": "Subdirectory for textures (empty = root)",
+                               "zh": "贴图子目录（空 = 放在根目录）"},
     # Input rules tab
     "grp_match":             {"en": "Match Settings", "zh": "匹配设置"},
     "match_mode":            {"en": "Match Mode", "zh": "匹配模式"},
@@ -984,8 +1004,10 @@ class ConfigEditorWindow(QtWidgets.QWidget):
             "Fallback Import Path", "/Game/AIGC_Dropoff", "目标路径计算失败时的回退路径")
         g1l.addWidget(self.w_fallback_path)
         self.w_target_tpl = LabeledLine(
-            "Target Path Template", "/Game/Assets/{Category}/{Name}",
-            "资产落地目录模板，支持 {Category}, {Name}")
+            "Target Path Template", "",
+            "资产落地目录模板，支持 {Category}, {Name}。留空 = 使用内容浏览器当前选中目录。")
+        self.w_target_tpl.edit.setPlaceholderText(
+            _t("target_tpl_ph"))
         g1l.addWidget(self.w_target_tpl)
         self.w_conflict = LabeledCombo(
             "Conflict Policy", CONFLICT_POLICIES, "version",
@@ -1003,6 +1025,30 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_nm_tex = LabeledLine("Texture", "T_{Name}_{Suffix}", "贴图命名模板")
         g2l.addWidget(self.w_nm_tex)
         lay.addWidget(g2)
+
+        g3 = QtWidgets.QGroupBox("Asset Subdirectories")
+        self._grp_subdirs = g3
+        g3l = QtWidgets.QVBoxLayout(g3)
+        self.w_subdir_mode = LabeledCombo(
+            "Layout Mode",
+            [_t("subdir_aggregated"), _t("subdir_separate")],
+            _t("subdir_aggregated"),
+            "聚合：全部放同一目录；独立文件夹：按类型分子目录")
+        self.w_subdir_mode.combo.currentIndexChanged.connect(self._on_subdir_mode_changed)
+        g3l.addWidget(self.w_subdir_mode)
+        self.w_subdir_sm = LabeledLine(
+            "Static Mesh Subdir", "",
+            "静态网格子目录（空 = 放在根目录）")
+        g3l.addWidget(self.w_subdir_sm)
+        self.w_subdir_mi = LabeledLine(
+            "Material Instance Subdir", "Materials",
+            "材质实例子目录（空 = 放在根目录）")
+        g3l.addWidget(self.w_subdir_mi)
+        self.w_subdir_tex = LabeledLine(
+            "Texture Subdir", "Textures",
+            "贴图子目录（空 = 放在根目录）")
+        g3l.addWidget(self.w_subdir_tex)
+        lay.addWidget(g3)
 
         lay.addStretch()
         scroll.setWidget(content)
@@ -1108,6 +1154,11 @@ class ConfigEditorWindow(QtWidgets.QWidget):
                 "material_instance": "MI_{Name}",
                 "texture": "T_{Name}_{Suffix}",
             },
+            "asset_subdirectories": {
+                "static_mesh": "",
+                "material_instance": "",
+                "texture": "",
+            },
             "texture_input_rules": {
                 "match_mode": "glob",
                 "ignore_case": True,
@@ -1210,6 +1261,17 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_nm_mi.set_value(ant.get("material_instance", "MI_{Name}"))
         self.w_nm_tex.set_value(ant.get("texture", "T_{Name}_{Suffix}"))
 
+        asd = data.get("asset_subdirectories", {})
+        sm_val = asd.get("static_mesh", "")
+        mi_val = asd.get("material_instance", "")
+        tex_val = asd.get("texture", "")
+        has_subdirs = bool(sm_val or mi_val or tex_val)
+        self.w_subdir_mode.combo.setCurrentIndex(1 if has_subdirs else 0)
+        self.w_subdir_sm.set_value(sm_val)
+        self.w_subdir_mi.set_value(mi_val)
+        self.w_subdir_tex.set_value(tex_val)
+        self._on_subdir_mode_changed(1 if has_subdirs else 0)
+
         # Input rules
         tir = data.get("texture_input_rules", {})
         self.w_match_mode.set_value(tir.get("match_mode", "glob"))
@@ -1243,6 +1305,11 @@ class ConfigEditorWindow(QtWidgets.QWidget):
                 "material_instance": self.w_nm_mi.value(),
                 "texture": self.w_nm_tex.value(),
             },
+            "asset_subdirectories": {
+                "static_mesh": self.w_subdir_sm.value() if self.w_subdir_mode.combo.currentIndex() == 1 else "",
+                "material_instance": self.w_subdir_mi.value() if self.w_subdir_mode.combo.currentIndex() == 1 else "",
+                "texture": self.w_subdir_tex.value() if self.w_subdir_mode.combo.currentIndex() == 1 else "",
+            },
             "texture_input_rules": {
                 "match_mode": self.w_match_mode.value(),
                 "ignore_case": self.w_ignore_case.value(),
@@ -1253,6 +1320,26 @@ class ConfigEditorWindow(QtWidgets.QWidget):
             "texture_output_definitions": [c.to_dict() for c in self._output_cards],
         }
         return data
+
+    # ------------------------------------------------------------------
+    # Subdirectory mode toggle
+    # ------------------------------------------------------------------
+    def _on_subdir_mode_changed(self, index: int) -> None:
+        """Enable/disable subdirectory fields based on mode selection."""
+        separate = index == 1
+        self.w_subdir_sm.setEnabled(separate)
+        self.w_subdir_mi.setEnabled(separate)
+        self.w_subdir_tex.setEnabled(separate)
+        if not separate and not self._loading:
+            self.w_subdir_sm.set_value("")
+            self.w_subdir_mi.set_value("")
+            self.w_subdir_tex.set_value("")
+        elif separate and not self._loading:
+            # Provide sensible defaults if switching to separate and fields are empty
+            if not self.w_subdir_mi.value():
+                self.w_subdir_mi.set_value("Materials")
+            if not self.w_subdir_tex.value():
+                self.w_subdir_tex.set_value("Textures")
 
     # ------------------------------------------------------------------
     # Output cards management
@@ -1329,6 +1416,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_target_tpl._lbl.setText(_t("target_tpl"))
         self.w_target_tpl._lbl.setToolTip(_t("target_tpl_tip"))
         self.w_target_tpl.edit.setToolTip(_t("target_tpl_tip"))
+        self.w_target_tpl.edit.setPlaceholderText(_t("target_tpl_ph"))
         self.w_conflict._lbl.setText(_t("conflict"))
         self.w_conflict._lbl.setToolTip(_t("conflict_tip"))
         self._grp_naming.setTitle(_t("grp_naming"))
@@ -1338,6 +1426,23 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_nm_mi._lbl.setToolTip(_t("nm_mi_tip"))
         self.w_nm_tex._lbl.setText(_t("nm_tex"))
         self.w_nm_tex._lbl.setToolTip(_t("nm_tex_tip"))
+        # Asset subdirectories
+        self._grp_subdirs.setTitle(_t("grp_subdirs"))
+        self.w_subdir_mode._lbl.setText(_t("subdir_mode"))
+        self.w_subdir_mode._lbl.setToolTip(_t("subdir_mode_tip"))
+        self.w_subdir_mode.combo.setToolTip(_t("subdir_mode_tip"))
+        # Refresh combo item texts
+        self.w_subdir_mode.combo.setItemText(0, _t("subdir_aggregated"))
+        self.w_subdir_mode.combo.setItemText(1, _t("subdir_separate"))
+        self.w_subdir_sm._lbl.setText(_t("subdir_sm"))
+        self.w_subdir_sm._lbl.setToolTip(_t("subdir_sm_tip"))
+        self.w_subdir_sm.edit.setToolTip(_t("subdir_sm_tip"))
+        self.w_subdir_mi._lbl.setText(_t("subdir_mi"))
+        self.w_subdir_mi._lbl.setToolTip(_t("subdir_mi_tip"))
+        self.w_subdir_mi.edit.setToolTip(_t("subdir_mi_tip"))
+        self.w_subdir_tex._lbl.setText(_t("subdir_tex"))
+        self.w_subdir_tex._lbl.setToolTip(_t("subdir_tex_tip"))
+        self.w_subdir_tex.edit.setToolTip(_t("subdir_tex_tip"))
         # Input rules tab
         self._grp_match.setTitle(_t("grp_match"))
         self.w_match_mode._lbl.setText(_t("match_mode"))

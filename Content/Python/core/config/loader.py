@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Union
 from core.textures.layer_merge import BlendMode
 from .schema import (
     AssetNamingTemplate,
+    AssetSubdirectories,
     ChannelDef,
     ImportSettings,
     PluginConfig,
@@ -115,6 +116,15 @@ def load_config_from_dict(data: Dict[str, Any], base: Optional[PluginConfig] = N
     ant = data.get("asset_naming_template")
     if isinstance(ant, dict):
         cfg.asset_naming_template = _parse_naming_template(ant)
+
+    # --- 资产子目录 ---
+    asd = data.get("asset_subdirectories")
+    if isinstance(asd, dict):
+        cfg.asset_subdirectories = AssetSubdirectories(
+            static_mesh=str(asd.get("static_mesh", "")),
+            material_instance=str(asd.get("material_instance", "")),
+            texture=str(asd.get("texture", "")),
+        )
 
     # --- 贴图输入识别规则 ---
     tir = data.get("texture_input_rules")

@@ -12,9 +12,10 @@
   // 默认落地路径（当 target_path_template 计算失败时使用）
   "default_fallback_import_path": "/Game/AIGC_Dropoff",
 
-  // UE 资产落地目录模板（建议按品类/资产名分桶）
-  // {Category} 来自 Profile 文件名 (例如 "Prop")
-  "target_path_template": "/Game/Assets/{Category}/{Name}",
+  // UE 资产落地目录模板（留空 = 使用内容浏览器当前选中目录）
+  // 可用占位符：{Category}（来自 Profile 文件名）、{Name}（FBX 文件名）
+  // 示例: "/Game/Assets/{Category}/{Name}"
+  "target_path_template": "",
 
   // 命名冲突策略：overwrite | skip | version（自动追加 _001, _002…）
   "conflict_policy": "version",
@@ -24,6 +25,17 @@
     "static_mesh": "SM_{Name}",
     "material_instance": "MI_{Name}",
     "texture": "T_{Name}_{Suffix}"
+  },
+
+  // 资产子目录（可选，空字符串表示放在 target_path 根目录）
+  // 示例：target_path = /Game/Assets/Prop/MyRock
+  //   static_mesh  → /Game/Assets/Prop/MyRock/SM_MyRock
+  //   material     → /Game/Assets/Prop/MyRock/Materials/MI_MyRock
+  //   texture      → /Game/Assets/Prop/MyRock/Textures/T_MyRock_D
+  "asset_subdirectories": {
+    "static_mesh": "",
+    "material_instance": "Materials",
+    "texture": "Textures"
   },
 
   // === 输入识别规则（从投放目录里把文件匹配到“逻辑位”） ===

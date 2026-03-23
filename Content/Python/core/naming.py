@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 from typing import Callable, Dict, Optional
 
-from core.config.schema import AssetNamingTemplate, PluginConfig
+from core.config.schema import AssetNamingTemplate, AssetSubdirectories, PluginConfig
 
 
 @dataclass
@@ -27,6 +27,9 @@ class ResolvedNames:
     texture_names: Dict[str, str]     # suffix -> T_MyRock_D, T_MyRock_N ...
     target_path: str                  # /Game/Assets/Prop/MyRock
     isolation_path: str               # {current_path}/_temp_MyRock
+    sm_path: str = ""                 # target_path[/sub]/SM_MyRock
+    mi_path: str = ""                 # target_path[/sub]/MI_MyRock
+    texture_base_path: str = ""       # target_path[/sub]  贴图根目录
 
 
 def _expand_template(template: str, variables: Dict[str, str]) -> str:
@@ -68,7 +71,15 @@ def resolve_names(
         tex_names[suffix] = _expand_template(ant.texture, tex_vars)
 
     target_path = _expand_template(config.target_path_template, variables)
+    if not target_path:
+        target_path = current_path
     isolation_path = f"{current_path}/_temp_{base_name}"
+
+    # 子目录路径计算
+    sub = config.asset_subdirectories
+    sm_base = f"{target_path}/{sub.static_mesh}" if sub.static_mesh else target_path
+    mi_base = f"{target_path}/{sub.material_instance}" if sub.material_instance else target_path
+    tex_base = f"{target_path}/{sub.texture}" if sub.texture else target_path
 
     return ResolvedNames(
         base_name=base_name,
@@ -78,6 +89,9 @@ def resolve_names(
         texture_names=tex_names,
         target_path=target_path,
         isolation_path=isolation_path,
+        sm_path=f"{sm_base}/{sm_name}",
+        mi_path=f"{mi_base}/{mi_name}",
+        texture_base_path=tex_base,
     )
 
 

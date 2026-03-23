@@ -1,7 +1,7 @@
 """名称解析器单元测试。"""
 import pytest
 
-from core.config.schema import AssetNamingTemplate, PluginConfig, TextureOutputDef
+from core.config.schema import AssetNamingTemplate, AssetSubdirectories, PluginConfig, TextureOutputDef
 from core.naming import (
     ResolvedNames,
     compute_isolation_path,
@@ -54,6 +54,42 @@ class TestResolveNames:
         assert "N" in names.texture_names
         assert "H" not in names.texture_names  # disabled
         assert names.texture_names["D"] == "T_MyRock_D"
+        # 默认无子目录 → 全部在 target_path 下
+        assert names.sm_path == "/Game/Assets/Prop/MyRock/SM_MyRock"
+        assert names.mi_path == "/Game/Assets/Prop/MyRock/MI_MyRock"
+        assert names.texture_base_path == "/Game/Assets/Prop/MyRock"
+
+    def test_subdirectories(self):
+        cfg = self._make_config()
+        cfg.asset_subdirectories = AssetSubdirectories(
+            static_mesh="",
+            material_instance="Materials",
+            texture="Textures",
+        )
+        names = resolve_names(cfg, "MyRock", "Prop")
+        assert names.sm_path == "/Game/Assets/Prop/MyRock/SM_MyRock"
+        assert names.mi_path == "/Game/Assets/Prop/MyRock/Materials/MI_MyRock"
+        assert names.texture_base_path == "/Game/Assets/Prop/MyRock/Textures"
+
+    def test_subdirectories_all_empty(self):
+        cfg = self._make_config()
+        cfg.asset_subdirectories = AssetSubdirectories(
+            static_mesh="", material_instance="", texture="",
+        )
+        names = resolve_names(cfg, "Box", "Prop")
+        assert names.sm_path == "/Game/Assets/Prop/Box/SM_Box"
+        assert names.mi_path == "/Game/Assets/Prop/Box/MI_Box"
+        assert names.texture_base_path == "/Game/Assets/Prop/Box"
+
+    def test_empty_template_fallback_to_current_path(self):
+        """target_path_template 为空时应 fallback 到 current_path。"""
+        cfg = self._make_config()
+        cfg.target_path_template = ""
+        names = resolve_names(cfg, "Lamp", "Prop", "/Game/MyProject/Props")
+        assert names.target_path == "/Game/MyProject/Props"
+        assert names.sm_path == "/Game/MyProject/Props/SM_Lamp"
+        assert names.mi_path == "/Game/MyProject/Props/MI_Lamp"
+        assert names.texture_base_path == "/Game/MyProject/Props"
 
     def test_custom_current_path(self):
         cfg = self._make_config()
