@@ -43,6 +43,51 @@
 - 注册：`ui.py._register_asset_context_menu()` 在 `ContentBrowser.AssetContextMenu` 添加 Send 子菜单
 - 入口：`actions.py.on_send_to_photoshop()` → 懒加载 PhotoshopBridge 单例
 
+## 模块 G：外部编辑器桥接（Send to Substance Painter）— 计划中
+
+> 设计文档：[ADR-0004](./decisions/ADR-0004-send-to-substance-painter.md)
+
+### 概述
+
+从 Content Browser 右键选中 StaticMesh，一键发送模型+材质+贴图到 Substance Painter。
+与 Module F（Photoshop）不同，SP Bridge 是**跨项目协作**：UE 侧由 AssetCustoms 负责，SP 侧由 SPsync 插件负责。
+
+### 架构
+
+```
+AssetCustoms (UE)                              SPsync (SP)
+─────────────                                  ──────────
+                                               
+sp_bridge.py                                   sp_receive.py
+├── collect_material_info() → JSON             ├── receive_from_ue(json)
+├── export_mesh_fbx() → /tmp/model.fbx        │   ├── project.create(mesh)
+├── export_textures() → /tmp/T_*.tga          │   ├── resource.import_project_resource()
+└── send_to_sp() ─────HTTP POST──────────────►│   ├── layerstack.insert_fill()
+                                               │   ├── fill.set_source(ChannelType, ResourceID)
+sp_remote.py (RemotePainter)                   │   └── 配置 export preset
+├── base64 encode + HTTP POST → :60041         │
+└── 连接检测 + 错误处理                          └── 用户编辑 → sp_sync_export（现有回传）
+```
+
+### 通信方式
+
+- **UE→SP**：HTTP POST base64(python_script) 至 SP Remote Scripting API（localhost:60041）
+- **SP→UE**：SPsync 现有链路（Remote Execution TCP 6776），**零改动**
+
+### 新增文件
+
+| 文件 | 位置 | 职责 |
+|------|------|------|
+| `sp_bridge.py` | `unreal_integration/` | SPBridge 类：材质收集 + FBX/贴图导出 + 数据包组装 |
+| `sp_remote.py` | `unreal_integration/` | RemotePainter 类：HTTP 客户端（从 Reference/lib_remote.py 移入） |
+| `sp_receive.py` | SPsync 插件目录 | 接收模块：项目创建 + Layer + 通道分配 + 导出预设 |
+
+### 依赖
+
+- SP 必须以 `--enable-remote-scripting` 参数启动
+- SPsync 插件必须已安装并启用
+- AssetCustoms vendor_libs 已部署（PIL 用于贴图格式转换）
+
 ## 数据流（时序）
 1) UE 加载插件 -> `init_unreal.py` 注册 UI 与加载 Profile 列表。
 2) 用户选择“AssetCustoms: 智能导入 ▼”中的某 Profile -> 打开 .fbx 文件对话框。
@@ -79,6 +124,12 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   │       ├─ init_unreal.py        # UE Python 入口脚本
   │       ├─ core/                 # 纯 Python 核心（无 Unreal 依赖）
   │       ├─ unreal_integration/   # Unreal API 桥接层
+  │       │   ├─ actions.py        # 按钮回调（导入、分诊、Send to PS/SP）
+  │       │   ├─ ui.py             # 菜单/工具栏注册
+  │       │   ├─ import_pipeline.py # FR2-FR5 导入管线
+  │       │   ├─ photoshop_bridge.py # Send to Photoshop (M6)
+  │       │   ├─ sp_bridge.py      # Send to Substance Painter (M7, 计划中)
+  │       │   └─ sp_remote.py      # SP HTTP 客户端 (M7, 计划中)
   │       └─ unreal_qt/            # PySide6 Qt 集成层（详见下方）
   │           ├─ __init__.py       # QApplication 管理 / tick 挂载 / widget 生命周期
   │           └─ dark_bar.py       # 无边框暗色标题栏（DarkBar / FramelessWindow）

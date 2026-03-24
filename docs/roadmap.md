@@ -149,6 +149,59 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 3. TextureMonitor（1s 轮询）检测 PSD 修改 → 自动重新导入（保留 sRGB/压缩/LOD 设置）
 4. Photoshop 关闭后自动清理临时文件（TGA + PSD）
 
+## M7 — Send to Substance Painter（计划中）
+
+> 设计文档：[ADR-0004](./decisions/ADR-0004-send-to-substance-painter.md)（状态：已确认）
+> 可行性评估：三轮验证完成（Reference 代码 + SP API 源码 + 生产级参考工具）
+
+**目标**：从 Content Browser 右键选中 StaticMesh，一键发送模型+材质+贴图到 Substance Painter，完成贴图创作后自动回传 UE。
+
+**跨项目协作**：AssetCustoms（UE 侧发送）+ SPsync（SP 侧接收+回传）
+
+### Phase 1：AssetCustoms UE 侧（发送端）
+
+- [ ] Step 1：`sp_remote.py` — RemotePainter HTTP 客户端
+  - 从 Reference/lib_remote.py 移入正式代码
+  - base64 编码 + HTTP POST → SP `:60041`
+  - 连接检测 + 未连接时用户友好提示
+- [ ] Step 2：`sp_bridge.py` — SPBridge 主类
+  - `collect_material_info()` — 遍历 StaticMesh 材质槽位 + 贴图参数 → JSON
+  - `export_mesh_fbx()` — StaticMeshExporterFBX → 临时目录
+  - `export_textures()` — AssetExportTask → TGA/PNG
+  - `send_to_sp()` — 打包数据 + 调用 RemotePainter 执行 SP 端脚本
+- [ ] Step 3：菜单注册 + actions 集成
+  - `ui.py`：Send 子菜单新增 "Send to Substance Painter"
+  - `actions.py`：新增 `on_send_to_substance_painter()` 懒加载 SPBridge 单例
+
+### Phase 2：SPsync SP 侧（接收端）
+
+- [ ] Step 4：`sp_receive.py` — 接收模块（**关键路径**）
+  - `receive_from_ue(json_data)` — 解析 UE 数据包
+  - 创建 SP 项目：`project.create(mesh_path, Settings(...))`
+  - 导入贴图：`resource.import_project_resource(path, Usage.TEXTURE)`
+  - 创建 Fill Layer：`layerstack.insert_fill(position)`
+  - 通道分配：`fill.set_source(ChannelType, resource_id)`
+  - 配置导出预设：动态生成 export config JSON
+- [ ] Step 5：`sp_channel_map.py`（可选）
+  - UE 材质参数名 ↔ SP ChannelType 映射字典
+
+### Phase 3：集成与回传
+
+- [ ] Step 6：回传链路验证
+  - 确认 SPsync 现有 `export_end_event()` → `sync_ue_textures()` 链路正常工作
+  - 确认导出路径与 UE Content 路径对齐
+- [ ] Step 7：端到端测试
+  - UE 右键发送 → SP 创建项目 + Layer → 编辑 → 导出 → 自动回传 UE
+  - 验证回传贴图格式、命名、材质绑定
+
+### 前置条件
+
+| 条件 | 说明 |
+|------|------|
+| SP 启动参数 | 必须以 `--enable-remote-scripting` 启动 Substance Painter |
+| SPsync 已安装 | SP 插件目录中需存在 SPsync 插件并启用 |
+| vendor_libs 已部署 | AssetCustoms deploy.ps1 已执行 |
+
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。
 - 文件名/贴图规则存在多样性：必须优先“智能预填充”，回退到规则匹配与分诊 UI。
