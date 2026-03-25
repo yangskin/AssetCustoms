@@ -160,39 +160,179 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 
 ### Phase 1：AssetCustoms UE 侧（发送端）
 
-- [ ] Step 1：`sp_remote.py` — RemotePainter HTTP 客户端
+> 测试标注：🤖 pytest 自动 | 👁️ 人工-UE | 🎨 人工-SP | 🔄 人工-E2E
+
+- [x] Step 1：`sp_remote.py` — RemotePainter HTTP 客户端（28 tests）
   - 从 Reference/lib_remote.py 移入正式代码
   - base64 编码 + HTTP POST → SP `:60041`
   - 连接检测 + 未连接时用户友好提示
-- [ ] Step 2：`sp_bridge.py` — SPBridge 主类
+  - 测试：🤖 base64 编码 / HTTP mock / 错误处理 → 🎨 实际 SP 连通性
+- [x] Step 2：`sp_bridge.py` — SPBridge 主类（27 tests）
   - `collect_material_info()` — 遍历 StaticMesh 材质槽位 + 贴图参数 → JSON
   - `export_mesh_fbx()` — StaticMeshExporterFBX → 临时目录
   - `export_textures()` — AssetExportTask → TGA/PNG
   - `send_to_sp()` — 打包数据 + 调用 RemotePainter 执行 SP 端脚本
-- [ ] Step 3：菜单注册 + actions 集成
+  - 测试：🤖 JSON schema / 序列化 / 数据包组装 → 👁️ UE API 导出 → 🔄 实际发送
+- [x] Step 3：菜单注册 + actions 集成 ✅
   - `ui.py`：Send 子菜单新增 "Send to Substance Painter"
   - `actions.py`：新增 `on_send_to_substance_painter()` 懒加载 SPBridge 单例
+  - 测试：👁️ 菜单可见 + 点击触发 + 不影响现有菜单
 
 ### Phase 2：SPsync SP 侧（接收端）
 
-- [ ] Step 4：`sp_receive.py` — 接收模块（**关键路径**）
+- [x] Step 4：`sp_receive.py` — 接收模块（24 tests）
   - `receive_from_ue(json_data)` — 解析 UE 数据包
   - 创建 SP 项目：`project.create(mesh_path, Settings(...))`
   - 导入贴图：`resource.import_project_resource(path, Usage.TEXTURE)`
   - 创建 Fill Layer：`layerstack.insert_fill(position)`
   - 通道分配：`fill.set_source(ChannelType, resource_id)`
   - 配置导出预设：动态生成 export config JSON
-- [ ] Step 5：`sp_channel_map.py`（可选）
-  - UE 材质参数名 ↔ SP ChannelType 映射字典
+  - 测试：🤖 JSON 解析 / 校验 / 导出配置生成 → 🎨 SP 内 layerstack 全链路
+- [x] Step 5：`sp_channel_map.py`（31 tests）
+  - UE 材质参数名 ↔ SP ChannelType 映射字典 + `_Texture` 后缀 + packed 映射
+  - 测试：🤖 31 passed
 
 ### Phase 3：集成与回传
 
-- [ ] Step 6：回传链路验证
-  - 确认 SPsync 现有 `export_end_event()` → `sync_ue_textures()` 链路正常工作
-  - 确认导出路径与 UE Content 路径对齐
-- [ ] Step 7：端到端测试
+- [x] Step 6：回传链路验证 ✅
+  - SPsync 事件驱动架构（ProjectEditionEntered 回调），全链路已打通
+  - 9 个运行时问题已修复（详见 .ai-context/current-task.md）
+- [ ] Step 7：端到端测试（待人工验证）
   - UE 右键发送 → SP 创建项目 + Layer → 编辑 → 导出 → 自动回传 UE
   - 验证回传贴图格式、命名、材质绑定
+  - 测试：🔄 完整主链路 + 异常场景矩阵（SP 未启动 / SM 无材质 / 多材质槽 / UDIM）
+
+### 测试统计
+
+| 类型 | 数量 | 占比 |
+|------|------|------|
+| 🤖 pytest 自动 | 10 | 40% |
+| 👁️ 人工-UE | 5 | 20% |
+| 🎨 人工-SP | 5 | 20% |
+| 🔄 人工-E2E | 5 | 20% |
+
+**开发顺序建议**：① 纯逻辑 + pytest → ② UE 侧人工 → ③ SP 侧人工 → ④ 跨工具 E2E
+
+> 详细任务拆分（25 项子任务 + 测试标注）见 [ADR-0004 §10](./decisions/ADR-0004-send-to-substance-painter.md#104-细化任务拆分含测试标注)
+
+### Phase 4：Config Profile 元数据标签（配置驱动映射）
+
+> 设计文档：[ADR-0005](./decisions/ADR-0005-config-profile-metadata-tag.md)（状态：计划中）
+
+**目标**：通过 UE Metadata Tag 将 Profile 信息持久化到资产上，实现配置驱动的通道映射，替代 `sp_channel_map.py` 硬编码。
+
+- [x] Step 8：导入管线打标签 ✅
+  - `import_pipeline.py`：三条管线路径（native embedded / standard / resume_after_triage）MI/SM 创建后打 `AssetCustoms_ConfigProfile` 标签
+  - `UnrealAssetOps` 新增 `set_metadata_tag()` + `remove_metadata_tag()` 方法
+  - 测试：🤖 mock 验证调用参数 → 👁️ 导入后确认 tag 存在
+- [x] Step 9：Content Browser 右键菜单查看/编辑 Profile ✅
+  - `ui.py`：新增 "Config Profile ▸" 子菜单（View / Set Profile ▸ / Clear）
+  - `actions.py`：新增 `on_view_config_profile()`、`on_set_config_profile(profile_name)`、`on_clear_config_profile()`
+  - Profile 列表从 Config 目录动态扫描，支持多选资产批量操作
+  - 测试：👁️ 菜单可见性 + View/Set/Clear 功能验证
+- [x] Step 10：SP 发送配置驱动映射 ✅
+  - `sp_bridge.py`：读取 SM tag → 加载 config → 将 `parameter_bindings` 注入 SP 数据包（顶层）
+  - `sp_channel_map.py`：新增 `map_ue_to_sp_with_bindings()` 动态映射 + `_SUFFIX_TO_SP_CHANNEL` 字典
+  - `sp_receive.py`：`resolve_channel()` 闭包按需选择动态/硬编码映射
+  - 无 tag 时 fallback 到现有硬编码映射（向后兼容）
+  - 测试：🤖 AssetCustoms 56 passed, SPsync 122 passed（+15 新增）
+
+### Phase 5：Per-Material Profile + 多 TextureSet 支持
+
+> 动机：一个 StaticMesh 可包含多个材质槽，不同材质可能对应不同 Profile（如 Body=Character, Weapon=Prop），
+> Step 10 的"SM 顶层单 Profile"模型无法覆盖此场景。
+
+**目标**：将 ConfigProfile 粒度从 SM 级提升到 MI 级，支持每个材质独立配置 + SP 侧多 TextureSet 分发。
+
+- [x] Step 11：UE 侧 per-MI Profile 读取与数据包重构 ✅
+  - `sp_bridge.py`：`_collect_material_info()` 改为逐材质读取 MI 上的 `AssetCustoms_ConfigProfile` tag
+  - 新增 `material_slot_name` 字段：通过 `static_mesh.get_material_slot_names()` 获取材质槽名称
+  - 每个 MI 独立加载对应 config → 提取 `parameter_bindings`
+  - 数据包结构变更：`parameter_bindings` + `config_profile` + `material_slot_name` 注入 `materials[]` 每个元素
+  - SM 顶层 `parameter_bindings` 保留作为 fallback（MI 无 tag 时继承 SM 的）
+  - 测试：🤖 AssetCustoms 56 passed → 👁️ UE 验证
+- [x] Step 12：SP 侧多 TextureSet 分发 ✅
+  - `sp_receive.py`：`_on_project_ready()` 重构
+    - 遍历 `textureset.all_texture_sets()` 构建 `{name: TextureSet}` 映射
+    - 使用 `material_slot_name` 匹配 SP TextureSet（FBX 导出材质名 = UE 材质槽名）
+    - 每个 TextureSet 使用其材质自带的 `parameter_bindings`（per-material 闭包）
+    - 未匹配的材质输出 WARNING；单 TextureSet 时自动 fallback
+  - 测试：🤖 SPsync 139 passed (44 sp_receive) → 🎨 SP 内多 TextureSet 验证
+- [x] Step 13：材质槽名对应关系 + 匹配策略 ✅
+  - **核心对应关系**：UE SM.material_slot_name ──FBX导出──→ SP TextureSet.name()
+  - `match_material_to_textureset(material_name, ts_names, slot_name)`
+  - 匹配优先级：① slot_name 精确 → ② slot_name 大小写不敏感 → ③ material_name 精确 → ④ 去 MI_ 前缀 → ⑤ 大小写不敏感
+  - UE/SP 双侧输出 slot_name + material_name 日志，便于排查不匹配
+  - 测试：🤖 14 项匹配策略单元测试 → 🔄 E2E 多材质发送验证
+- [ ] Step 14：端到端验证 + 回归
+  - 单材质 SM（向后兼容）：与 Step 10 行为一致
+  - 多材质 SM 同 Profile：所有 MI 同一 Profile，结果一致
+  - 多材质 SM 混合 Profile：Body=Character + Weapon=Prop，各自映射正确
+  - 无 tag SM + 有/无 tag MI：各种 fallback 组合验证
+  - 测试：🔄 4 种场景矩阵
+
+### Phase 6：Grayscale Conversion Filter 通道拆分（Packed Texture 拆通道）
+
+> 可行性验证：PoC 探测脚本 8/8 通过（`SPsync/tests/probe_filter_api.py`）
+> 确认的 SP Python API 链：`resource.search()` → `insert_filter_effect()` → `SourceSubstance.set_parameters()`
+
+**目标**：支持 Packed Texture（如 MRO）在 SP 中自动拆分为独立通道，使用 Grayscale Conversion Filter 按 RGBA 权重提取单通道。
+
+**设计概要**：
+
+1. **配置语法扩展**：`parameter_bindings` 支持 `.R/.G/.B/.A` 通道后缀
+   ```jsonc
+   // 之前（整包映射，MRO 只能映射到 Roughness）
+   "parameter_bindings": { "MRO": "Packed_Texture" }
+   // 之后（逐通道映射）
+   "parameter_bindings": {
+     "D": "BaseColor_Texture",
+     "N": "Normal_Texture",
+     "M": "Packed_Texture.R",    // Metallic ← R 通道
+     "R": "Packed_Texture.G",    // Roughness ← G 通道
+     "AO": "Packed_Texture.B"    // AO ← B 通道
+   }
+   ```
+
+2. **SP 侧流程**：
+   ```
+   Fill Layer (Packed_Texture → 目标通道)
+     └─ Filter Effect (Grayscale Conversion)
+          grayscale_type = 1 (Channels Weights)
+          Red = 1.0, Green = 0.0, Blue = 0.0, Alpha = 0.0  ← 按 .R/.G/.B/.A 设置
+   ```
+
+3. **已确认的 Filter 参数 Schema**：
+   - `grayscale_type`: int — `{0: Desaturation, 1: Channels Weights, 2: Average, 3: Max, 4: Min}`
+   - `Red/Green/Blue/Alpha`: float [0,1]
+   - `channel_input`: int — `{0: Current Channel, 1: Custom Input}`
+   - `invert`: int (bool)
+   - `balance/contrast`: float [0,1]
+   - Filter ResourceID: `starter_assets/grayscale_conversion/grayscale_conversion`
+
+**实施步骤**：
+
+- [ ] Step 15a：通道后缀解析（`sp_channel_map.py`）
+  - 新增 `parse_channel_suffix(binding_value)` → `(texture_param, channel_weights | None)`
+  - 通道后缀映射：`.R` → `{Red:1,Green:0,Blue:0,Alpha:0}`，`.G/.B/.A` 同理
+  - 无后缀时返回 `None`（走现有普通流程）
+  - 测试：🤖 后缀解析 + 权重映射 + 边界用例
+- [ ] Step 15b：SP 侧 Filter Effect 插入（`sp_receive.py`）
+  - `_on_project_ready()` 中识别带后缀的贴图
+  - 创建 Fill Layer 后，插入 Grayscale Conversion Filter Effect
+  - 设置 `grayscale_type=1` + 对应 RGBA 权重
+  - 同一 Packed Texture 多通道复用资源（仅导入一次）
+  - 测试：🤖 mock Filter 插入 + 参数验证 → 🎨 SP 内验证
+- [ ] Step 15c：UE 侧数据包扩展（`sp_bridge.py`）
+  - `_collect_material_info()` 检测 `.R/.G/.B/.A` 后缀
+  - 将拆分后的通道信息（`channel_suffix`）注入 `textures[]` 每个元素
+  - 同一 Packed Texture 的多个引用共享同一导出文件路径
+  - 测试：🤖 数据包结构验证 → 👁️ UE 侧验证
+- [ ] Step 15d：集成测试
+  - MRO Packed Texture → SP 中自动创建 3 个 Fill Layer（M/R/AO 各一个）
+  - 每个 Fill Layer 包含 Grayscale Conversion Filter + 正确的 RGBA 权重
+  - 向后兼容：无后缀的 bindings 行为不变
+  - 测试：🔄 E2E 验证
 
 ### 前置条件
 

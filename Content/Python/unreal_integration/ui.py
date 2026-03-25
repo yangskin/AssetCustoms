@@ -302,6 +302,82 @@ class AssetCustomsUI:
         except Exception:
             pass
 
+        sp_cmd = self._build_python_command("on_send_to_substance_painter")
+        sp_entry = self.make_py_entry(
+            entry_name=f"{section}.SendToSubstancePainter",
+            label="Send to Substance Painter",
+            tooltip="发送选中的 StaticMesh 到 Substance Painter",
+            python=sp_cmd,
+            is_toolbar=False,
+            icon={"style_set": "EditorStyle", "style_name": "ContentBrowser.AssetActions"},
+        )
+        try:
+            send_menu.add_menu_entry("Send", sp_entry)
+        except Exception:
+            pass
+
+        # --- Config Profile 子菜单 ---
+        profile_menu_name = f"{section}.ConfigProfile"
+        try:
+            profile_menu = menu.add_sub_menu(
+                menu.get_name(), "GetAssetActions", profile_menu_name, "Config Profile", ""
+            )
+        except Exception:
+            profile_menu = self.menus.extend_menu(profile_menu_name)
+
+        if profile_menu:
+            profile_section = "ConfigProfile"
+            try:
+                profile_menu.add_section(profile_section, profile_section)
+            except Exception:
+                pass
+            # View Profile
+            view_cmd = self._build_python_command("on_view_config_profile")
+            view_entry = self.make_py_entry(
+                entry_name=f"{section}.ViewConfigProfile",
+                label="View Profile",
+                tooltip="查看选中资产的 Config Profile 标签",
+                python=view_cmd,
+                is_toolbar=False,
+                icon={"style_set": "EditorStyle", "style_name": "Icons.Info"},
+            )
+            try:
+                profile_menu.add_menu_entry(profile_section, view_entry)
+            except Exception:
+                pass
+
+            # Set Profile — 直接平铺到 Config Profile 菜单（避免三级嵌套）
+            presets = self._scan_config_presets()
+            for p in presets:
+                set_cmd = self._build_ui_call_with_args("on_set_config_profile", [p["name"]])
+                set_entry = self.make_py_entry(
+                    entry_name=f"{section}.SetProfile.{p['name']}",
+                    label=f"Set: {p['label']}",
+                    tooltip=f"将选中资产的 Config Profile 设为 {p['name']}",
+                    python=set_cmd,
+                    is_toolbar=False,
+                    icon={"style_set": "EditorStyle", "style_name": "ClassIcon.StaticMesh"},
+                )
+                try:
+                    profile_menu.add_menu_entry(profile_section, set_entry)
+                except Exception:
+                    pass
+
+            # Clear Profile
+            clear_cmd = self._build_python_command("on_clear_config_profile")
+            clear_entry = self.make_py_entry(
+                entry_name=f"{section}.ClearConfigProfile",
+                label="Clear Profile",
+                tooltip="清除选中资产的 Config Profile 标签",
+                python=clear_cmd,
+                is_toolbar=False,
+                icon={"style_set": "EditorStyle", "style_name": "Icons.Delete"},
+            )
+            try:
+                profile_menu.add_menu_entry(profile_section, clear_entry)
+            except Exception:
+                pass
+
     def register_all(self) -> None:
         """一次性注册并刷新 UI。"""
         if self.cfg.get("dropdown_from_configs", False):

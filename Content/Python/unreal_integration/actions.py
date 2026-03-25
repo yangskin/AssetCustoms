@@ -283,6 +283,15 @@ class AssetCustomsActions:
             self._ps_bridge = PhotoshopBridge()
         self._ps_bridge.open_selected()
 
+    # ---- Send to Substance Painter ----
+    def on_send_to_substance_painter(self) -> None:
+        """发送选中的 StaticMesh 到 Substance Painter。"""
+        from unreal_integration.sp_bridge import SPBridge
+
+        if not hasattr(self, "_sp_bridge"):
+            self._sp_bridge = SPBridge()
+        self._sp_bridge.send_selected()
+
     # ---- 配置编辑器 ----
     def on_open_config_editor(self) -> None:
         """打开 JSONC 配置编辑器窗口。"""
@@ -322,3 +331,77 @@ class AssetCustomsActions:
 
         except Exception as ex:
             unreal.log_error(f"[AssetCustoms] 配置编辑器打开失败: {ex}")
+
+    # ---- Config Profile Tag 操作 ----
+
+    _CONFIG_PROFILE_TAG = "AssetCustoms_ConfigProfile"
+
+    def _get_selected_asset_paths(self) -> list[str]:
+        """返回 Content Browser 当前选中的资产路径列表。"""
+        try:
+            data = unreal.EditorUtilityLibrary.get_selected_asset_data()
+            return [str(d.get_asset().get_path_name()).split(".")[0] for d in data if d.get_asset()]
+        except Exception:
+            return []
+
+    def on_view_config_profile(self) -> None:
+        """查看选中资产的 Config Profile 标签。"""
+        paths = self._get_selected_asset_paths()
+        if not paths:
+            unreal.log_warning("[AssetCustoms] 未选中任何资产")
+            return
+
+        lines: list[str] = []
+        for p in paths:
+            try:
+                obj = unreal.EditorAssetLibrary.load_asset(p)
+                val = unreal.EditorAssetLibrary.get_metadata_tag(obj, self._CONFIG_PROFILE_TAG) if obj else ""
+            except Exception:
+                val = ""
+            name = p.rsplit("/", 1)[-1]
+            lines.append(f"{name}: {val or '(无)'}")
+
+        msg = "\n".join(lines)
+        unreal.log(f"[AssetCustoms] Config Profile:\n{msg}")
+        try:
+            unreal.EditorDialog.show_message("Config Profile", msg, unreal.AppMsgType.OK)
+        except Exception:
+            pass
+
+    def on_set_config_profile(self, profile_name: str) -> None:
+        """将选中资产的 Config Profile 标签设为指定值。"""
+        paths = self._get_selected_asset_paths()
+        if not paths:
+            unreal.log_warning("[AssetCustoms] 未选中任何资产")
+            return
+
+        for p in paths:
+            try:
+                obj = unreal.EditorAssetLibrary.load_asset(p)
+                if obj is None:
+                    unreal.log_error(f"[AssetCustoms] Failed to load asset: {p}")
+                    continue
+                unreal.EditorAssetLibrary.set_metadata_tag(obj, self._CONFIG_PROFILE_TAG, profile_name)
+                unreal.EditorAssetLibrary.save_asset(p)
+                unreal.log(f"[AssetCustoms] Set profile '{profile_name}' on {p}")
+            except Exception as ex:
+                unreal.log_error(f"[AssetCustoms] Failed to set profile on {p}: {ex}")
+
+    def on_clear_config_profile(self) -> None:
+        """清除选中资产的 Config Profile 标签。"""
+        paths = self._get_selected_asset_paths()
+        if not paths:
+            unreal.log_warning("[AssetCustoms] 未选中任何资产")
+            return
+
+        for p in paths:
+            try:
+                obj = unreal.EditorAssetLibrary.load_asset(p)
+                if obj is None:
+                    unreal.log_error(f"[AssetCustoms] Failed to load asset: {p}")
+                    continue
+                unreal.EditorAssetLibrary.remove_metadata_tag(obj, self._CONFIG_PROFILE_TAG)
+                unreal.EditorAssetLibrary.save_asset(p)
+                unreal.log(f"[AssetCustoms] Cleared profile on {p}")
+            except Exception as ex:
+                unreal.log_error(f"[AssetCustoms] Failed to clear profile on {p}: {ex}")

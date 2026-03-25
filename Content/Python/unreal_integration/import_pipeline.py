@@ -316,6 +316,34 @@ class UnrealAssetOps:
         unreal.EditorAssetLibrary.save_asset(texture_path)
         return True
 
+    def set_metadata_tag(self, asset_path: str, tag: str, value: str) -> bool:
+        """在资产上写入 Metadata Tag。"""
+        if unreal is None:
+            return False
+        try:
+            obj = unreal.EditorAssetLibrary.load_asset(asset_path)
+            if obj is None:
+                return False
+            unreal.EditorAssetLibrary.set_metadata_tag(obj, tag, value)
+            unreal.EditorAssetLibrary.save_asset(asset_path)
+            return True
+        except Exception:
+            return False
+
+    def remove_metadata_tag(self, asset_path: str, tag: str) -> bool:
+        """删除资产上的 Metadata Tag。"""
+        if unreal is None:
+            return False
+        try:
+            obj = unreal.EditorAssetLibrary.load_asset(asset_path)
+            if obj is None:
+                return False
+            unreal.EditorAssetLibrary.remove_metadata_tag(obj, tag)
+            unreal.EditorAssetLibrary.save_asset(asset_path)
+            return True
+        except Exception:
+            return False
+
     def delete_asset(self, asset_path: str) -> bool:
         """删除单个 UE 资产。"""
         if unreal is None:
@@ -734,6 +762,15 @@ def _run_native_embedded_pipeline(
         if mi:
             ops.set_static_mesh_material(sm_dst, mi_dst)
 
+        # 9.5 打标签：记录所用 Config Profile
+        if category:
+            _TAG = "AssetCustoms_ConfigProfile"
+            ops.set_metadata_tag(sm_dst, _TAG, category)
+            logger.info("Tagged SM '%s' with profile '%s'", sm_dst, category)
+            if mi:
+                ops.set_metadata_tag(mi_dst, _TAG, category)
+                logger.info("Tagged MI '%s' with profile '%s'", mi_dst, category)
+
         # 10. 清理隔离区
         ops.delete_directory(isolation_path)
 
@@ -1056,6 +1093,15 @@ def run_import_pipeline(
             if mi and check_result.static_mesh:
                 ops.set_static_mesh_material(sm_dst_path, mi_dst_path)
 
+            # 5.8.5 打标签：记录所用 Config Profile
+            if category:
+                _TAG = "AssetCustoms_ConfigProfile"
+                ops.set_metadata_tag(sm_dst_path, _TAG, category)
+                logger.info("Tagged SM '%s' with profile '%s'", sm_dst_path, category)
+                if mi:
+                    ops.set_metadata_tag(mi_dst_path, _TAG, category)
+                    logger.info("Tagged MI '%s' with profile '%s'", mi_dst_path, category)
+
             # 5.9 清理隔离区
             ops.delete_directory(isolation_path)
 
@@ -1251,6 +1297,15 @@ def resume_after_triage(
             # 5.8 绑定 SM → MI
             if mi and check_result.static_mesh:
                 ops.set_static_mesh_material(sm_dst_path, mi_dst_path)
+
+            # 5.8.5 打标签：记录所用 Config Profile
+            if category:
+                _TAG = "AssetCustoms_ConfigProfile"
+                ops.set_metadata_tag(sm_dst_path, _TAG, category)
+                logger.info("Tagged SM '%s' with profile '%s'", sm_dst_path, category)
+                if mi:
+                    ops.set_metadata_tag(mi_dst_path, _TAG, category)
+                    logger.info("Tagged MI '%s' with profile '%s'", mi_dst_path, category)
 
             # 5.9 清理隔离区
             ops.delete_directory(isolation_path)

@@ -170,7 +170,9 @@
       "parameter_bindings": {
         "D":   "BaseColor_Texture",
         "N":   "Normal_Texture",
-        "MRO": "Packed_Texture",
+        "M":   "Packed_Texture.R",
+        "R":   "Packed_Texture.G",
+        "AO":  "Packed_Texture.B",
         "SSS": "SubsurfaceColor_Texture"
       }
     },

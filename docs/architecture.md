@@ -88,6 +88,12 @@ sp_remote.py (RemotePainter)                   │   └── 配置 export pre
 - SPsync 插件必须已安装并启用
 - AssetCustoms vendor_libs 已部署（PIL 用于贴图格式转换）
 
+### Config Profile Metadata Tag（计划中）
+
+> 设计文档：[ADR-0005](./decisions/ADR-0005-config-profile-metadata-tag.md)
+
+导入管线在 SM/MI 创建后自动写入 `AssetCustoms_ConfigProfile` metadata tag（值 = Profile 名称如 "Prop"）。Send to SP 时读取 tag → 加载对应 config → 用 `parameter_bindings` 动态生成通道映射，替代硬编码 `sp_channel_map.py`。同时提供 Content Browser 右键菜单查看/编辑/清除 tag，支持旧资产补标。
+
 ## 数据流（时序）
 1) UE 加载插件 -> `init_unreal.py` 注册 UI 与加载 Profile 列表。
 2) 用户选择“AssetCustoms: 智能导入 ▼”中的某 Profile -> 打开 .fbx 文件对话框。
