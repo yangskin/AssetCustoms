@@ -1,18 +1,22 @@
 {
-  // === AssetCustoms Prop Profile — Config v2.0（三段式管线模型）===
-  // 设计文档：docs/decisions/ADR-0002-config-v2-pipeline-model.md
-  // {占位符} 运行时替换：{Name} {Suffix} {Category} {DropDir}
-
+  // === AssetCustoms 配置 v2.0 (JSONC) ===
+  // 运行时占位符：{Name} {Suffix} {Category} {DropDir}
   "config_version": "2.0",
 
-  // =====================================================================
-  // 阶段一：传入（Input）— "拿到什么、怎么识别"
-  // =====================================================================
+  // === 阶段一：传入（Input）— 拿到什么、怎么识别 ===
   "input": {
     "texture": {
       "match_mode": "glob",
       "ignore_case": true,
-      "extensions": [".png", ".tga", ".jpg", ".jpeg", ".exr", ".tif", ".tiff"],
+      "extensions": [
+        ".png",
+        ".tga",
+        ".jpg",
+        ".jpeg",
+        ".exr",
+        ".tif",
+        ".tiff"
+      ],
       "search_roots": [
         "{DropDir}",
         "{DropDir}/Textures",
@@ -20,25 +24,94 @@
         "{DropDir}/*.fbm"
       ],
       "rules": {
-        "BaseColor":        { "priority": 10, "patterns": ["*_BC.*", "*_BC_*", "*_BaseColor.*", "*_BaseColor_*", "*_Diffuse.*", "*_Diffuse_*", "*_Albedo.*", "*_Albedo_*", "*_rgb_*", "*_rgb.*", "*_color_*", "*_color.*"] },
-        "Normal":           { "priority": 10, "patterns": ["*_N.*", "*_N_*", "*_Normal.*", "*_Normal_*", "*_Nrm.*", "*_Nrm_*"] },
-        "Roughness":        { "priority": 9,  "patterns": ["*_R.*", "*_R_*", "*_Rough.*", "*_Rough_*", "*_Roughness.*", "*_Roughness_*"] },
-        "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
-        "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
-        "Height":           { "priority": 7,  "patterns": ["*_H.*", "*_H_*", "*_Height.*", "*_Height_*", "*_Displacement.*", "*_Displacement_*"] },
-        "Emissive":         { "priority": 7,  "patterns": ["*_E.*", "*_E_*", "*_Emissive.*", "*_Emissive_*", "*_Emission.*", "*_Emission_*"] }
+        "BaseColor": {
+          "priority": 10,
+          "patterns": [
+            "*_BC.*",
+            "*_BC_*",
+            "*_BaseColor.*",
+            "*_BaseColor_*",
+            "*_Diffuse.*",
+            "*_Diffuse_*",
+            "*_Albedo.*",
+            "*_Albedo_*",
+            "*_rgb_*",
+            "*_rgb.*",
+            "*_color_*",
+            "*_color.*"
+          ]
+        },
+        "Normal": {
+          "priority": 10,
+          "patterns": [
+            "*_N.*",
+            "*_N_*",
+            "*_Normal.*",
+            "*_Normal_*",
+            "*_Nrm.*",
+            "*_Nrm_*"
+          ]
+        },
+        "Roughness": {
+          "priority": 9,
+          "patterns": [
+            "*_R.*",
+            "*_R_*",
+            "*_Rough.*",
+            "*_Rough_*",
+            "*_Roughness.*",
+            "*_Roughness_*"
+          ]
+        },
+        "Metallic": {
+          "priority": 9,
+          "patterns": [
+            "*_M.*",
+            "*_M_*",
+            "*_Metal.*",
+            "*_Metal_*",
+            "*_Metallic.*",
+            "*_Metallic_*"
+          ]
+        },
+        "AmbientOcclusion": {
+          "priority": 8,
+          "patterns": [
+            "*_AO.*",
+            "*_AO_*",
+            "*_AmbientOcclusion.*",
+            "*_AmbientOcclusion_*"
+          ]
+        },
+        "Height": {
+          "priority": 7,
+          "patterns": [
+            "*_H.*",
+            "*_H_*",
+            "*_Height.*",
+            "*_Height_*",
+            "*_Displacement.*",
+            "*_Displacement_*"
+          ]
+        },
+        "Emissive": {
+          "priority": 7,
+          "patterns": [
+            "*_E.*",
+            "*_E_*",
+            "*_Emissive.*",
+            "*_Emissive_*",
+            "*_Emission.*",
+            "*_Emission_*"
+          ]
+        }
       }
     }
-    // 🔮 mesh / material 预留
   },
 
-  // =====================================================================
-  // 阶段二：处理（Processing）— "怎么加工"
-  // =====================================================================
+  // === 阶段二：处理（Processing）— 怎么加工 ===
   "processing": {
     "conflict_policy": "version",
-
-    // ── 模型导入设置（ADR-0003）──
     "mesh_import": {
       "import_uniform_scale": 1.0,
       "import_as_skeletal": false,
@@ -60,140 +133,212 @@
       "static_mesh_lod_group": "None",
       "import_materials": true,
       "import_textures": true,
-      "reorder_material_to_fbx_order": true
+      "reorder_material_to_fbx_order": true,
+      "skeleton_path": "",
+      "create_physics_asset": true,
+      "import_morph_targets": true,
+      "import_meshes_in_bone_hierarchy": true,
+      "update_skeleton_reference_pose": false,
+      "use_t0_as_ref_pose": false,
+      "preserve_smoothing_groups": true,
+      "import_content_type": "All"
     },
-
     "texture_definitions": [
+      // --- Diffuse ---
       {
-        // --- 漫反射 ---
         "enabled": true,
         "name": "Diffuse",
         "suffix": "D",
         "category": "PBR",
-        "channels": {
-          "R": { "from": "BaseColor", "ch": "R" },
-          "G": { "from": "BaseColor", "ch": "G" },
-          "B": { "from": "BaseColor", "ch": "B" },
-          "A": { "constant": 1.0 }
-        },
-        "flip_green": false,
-        "normal_space": null,
-        "allow_missing": false,
+        "srgb": true,
         "format": "PNG",
         "bit_depth": 8,
-        "srgb": true,
         "mips": true,
-        "resize": null,
-        "alpha_premultiplied": false
+        "alpha_premultiplied": false,
+        "allow_missing": false,
+        "flip_green": false,
+        "channels": {
+          "R": {
+            "from": "BaseColor",
+            "ch": "R"
+          },
+          "G": {
+            "from": "BaseColor",
+            "ch": "G"
+          },
+          "B": {
+            "from": "BaseColor",
+            "ch": "B"
+          },
+          "A": {
+            "constant": 1.0
+          }
+        }
       },
+      // --- Normal ---
       {
-        // --- 法线 ---
         "enabled": true,
         "name": "Normal",
         "suffix": "N",
         "category": "PBR",
-        "channels": {
-          "R": { "from": "Normal", "ch": "R", "constant": 0.5 },
-          "G": { "from": "Normal", "ch": "G", "constant": 0.5 },
-          "B": { "from": "Normal", "ch": "B", "constant": 1.0 },
-          "A": { "constant": 1.0 }
-        },
-        "flip_green": true,
-        "normal_space": "OpenGL",
-        "allow_missing": true,
+        "srgb": false,
         "format": "PNG",
         "bit_depth": 8,
-        "srgb": false,
-        "mips": true
+        "mips": true,
+        "alpha_premultiplied": false,
+        "allow_missing": true,
+        "flip_green": true,
+        "normal_space": "OpenGL",
+        "channels": {
+          "R": {
+            "from": "Normal",
+            "ch": "R",
+            "constant": 0.5
+          },
+          "G": {
+            "from": "Normal",
+            "ch": "G",
+            "constant": 0.5
+          },
+          "B": {
+            "from": "Normal",
+            "ch": "B",
+            "constant": 1.0
+          },
+          "A": {
+            "constant": 1.0
+          }
+        }
       },
+      // --- Packed_MRO ---
       {
-        // --- 金属/粗糙/AO 打包（MRO）---
         "enabled": true,
         "name": "Packed_MRO",
         "suffix": "MRO",
         "category": "PBR",
-        "channels": {
-          "R": { "from": "Metallic",         "ch": "R", "constant": 0.0 },
-          "G": { "from": "Roughness",        "ch": "R", "constant": 0.5 },
-          "B": { "from": "AmbientOcclusion", "ch": "R", "constant": 1.0 },
-          "A": { "constant": 1.0 }
-        },
-        "allow_missing": true,
+        "srgb": false,
         "format": "PNG",
         "bit_depth": 8,
-        "srgb": false,
-        "mips": true
+        "mips": true,
+        "alpha_premultiplied": false,
+        "allow_missing": true,
+        "flip_green": false,
+        "channels": {
+          "R": {
+            "from": "Metallic",
+            "ch": "R",
+            "constant": 0.0
+          },
+          "G": {
+            "from": "Roughness",
+            "ch": "R",
+            "constant": 0.5
+          },
+          "B": {
+            "from": "AmbientOcclusion",
+            "ch": "R",
+            "constant": 1.0
+          },
+          "A": {
+            "constant": 1.0
+          }
+        }
       },
+      // --- Height ---
       {
-        // --- 高度 ---
         "enabled": true,
         "name": "Height",
         "suffix": "H",
         "category": "PBR",
-        "channels": {
-          "R": { "from": "Height", "ch": "R", "remap": [0.0, 1.0, 0.0, 1.0], "constant": 0.0 },
-          "G": { "from": "Height", "ch": "R", "constant": 0.0 },
-          "B": { "from": "Height", "ch": "R", "constant": 0.0 },
-          "A": { "constant": 1.0 }
-        },
-        "allow_missing": true,
+        "srgb": false,
         "format": "PNG",
         "bit_depth": 16,
-        "srgb": false,
-        "mips": true
+        "mips": true,
+        "alpha_premultiplied": false,
+        "allow_missing": true,
+        "flip_green": false,
+        "channels": {
+          "R": {
+            "from": "Height",
+            "ch": "R",
+            "constant": 0.0
+          },
+          "G": {
+            "from": "Height",
+            "ch": "R",
+            "constant": 0.0
+          },
+          "B": {
+            "from": "Height",
+            "ch": "R",
+            "constant": 0.0
+          },
+          "A": {
+            "constant": 1.0
+          }
+        }
       },
+      // --- Emissive ---
       {
-        // --- 自发光（Emissive）---
         "enabled": true,
         "name": "Emissive",
         "suffix": "E",
         "category": "PBR",
-        "channels": {
-          "R": { "from": "Emissive", "ch": "R", "constant": 0.0 },
-          "G": { "from": "Emissive", "ch": "G", "constant": 0.0 },
-          "B": { "from": "Emissive", "ch": "B", "constant": 0.0 },
-          "A": { "constant": 1.0 }
-        },
-        "allow_missing": true,
+        "srgb": true,
         "format": "PNG",
         "bit_depth": 8,
-        "srgb": true,
-        "mips": true
+        "mips": true,
+        "alpha_premultiplied": false,
+        "allow_missing": true,
+        "flip_green": false,
+        "channels": {
+          "R": {
+            "from": "Emissive",
+            "ch": "R",
+            "constant": 0.0
+          },
+          "G": {
+            "from": "Emissive",
+            "ch": "G",
+            "constant": 0.0
+          },
+          "B": {
+            "from": "Emissive",
+            "ch": "B",
+            "constant": 0.0
+          },
+          "A": {
+            "constant": 1.0
+          }
+        }
       }
     ]
   },
 
-  // =====================================================================
-  // 阶段三：交付（Output）— "放哪里、叫什么、UE 怎么设"
-  // =====================================================================
+  // === 阶段三：交付（Output）— 放哪里、叫什么、UE 怎么设 ===
   "output": {
-    // 留空 = 使用内容浏览器当前目录
     "target_path_template": "",
-    "fallback_path": "/Game/AIGC_Dropoff",
-
+    "fallback_path": "/Game/Tame_Dropoff",
     "subdirectories": {
       "static_mesh": "",
       "material_instance": "Materials",
       "texture": "Textures"
     },
-
     "naming": {
       "static_mesh": "SM_{Name}",
       "material_instance": "MI_{Name}",
       "texture": "T_{Name}_{Suffix}"
     },
-
     "material": {
-      "master_material_path": "/Game/MyProject/Materials/Masters/MM_Prop_PBR.MM_Prop_PBR",
+      "master_material_path": "/AssetCustoms/Material/M_Base",
       "parameter_bindings": {
-        "D":   "BaseColor_Texture",
-        "N":   "Normal_Texture",
+        "D": "BaseColor_Texture",
+        "N": "Normal_Texture",
         "MRO": "Packed_Texture",
-        "H":   "Height_Texture",
-        "E":   "Emissive_Texture"
+        "H": "Height_Texture",
+        "E": "Emissive_Texture"
       }
     },
-
     "texture_import_defaults": {
       "compression": "TC_Default",
       "lod_group": "TEXTUREGROUP_World",
@@ -202,12 +347,17 @@
       "address_y": "Wrap",
       "mip_gen": "FromTextureGroup"
     },
-
     "texture_import_overrides": {
-      "N":   { "compression": "TC_Normalmap", "lod_group": "TEXTUREGROUP_WorldNormalMap" },
-      "MRO": { "compression": "TC_Masks" },
-      "H":   { "compression": "TC_Grayscale" },
-      "E":   { "srgb": true }
+      "N": {
+        "compression": "TC_Normalmap",
+        "lod_group": "TEXTUREGROUP_WorldNormalMap"
+      },
+      "MRO": {
+        "compression": "TC_Masks"
+      },
+      "H": {
+        "compression": "TC_Grayscale"
+      }
     }
   }
 }
