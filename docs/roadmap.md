@@ -1,6 +1,6 @@
 # 路线图 / 里程碑（V1.1）
 
-版本: V1.1（Config v1.1）  |  状态: M4 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-23
+版本: V1.1（Config v1.1）  |  状态: M7 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-25
 
 本文件用于跟踪项目阶段性目标与关键里程碑，确保对齐产品价值与技术落地节奏。
 
@@ -149,7 +149,7 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 3. TextureMonitor（1s 轮询）检测 PSD 修改 → 自动重新导入（保留 sRGB/压缩/LOD 设置）
 4. Photoshop 关闭后自动清理临时文件（TGA + PSD）
 
-## M7 — Send to Substance Painter（计划中）
+## M7 — Send to Substance Painter ✅（已完成 2026-03-25）
 
 > 设计文档：[ADR-0004](./decisions/ADR-0004-send-to-substance-painter.md)（状态：已确认）
 > 可行性评估：三轮验证完成（Reference 代码 + SP API 源码 + 生产级参考工具）
@@ -198,6 +198,51 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
   - SPsync 事件驱动架构（ProjectEditionEntered 回调），全链路已打通
   - 9 个运行时问题已修复（详见 .ai-context/current-task.md）
 - [ ] Step 7：端到端测试（待人工验证）
+
+### Phase 4：Config Profile Metadata Tag ✅（2026-03-25）
+
+> 设计文档：[ADR-0005](./decisions/ADR-0005-config-profile-metadata-tag.md)
+
+- [x] Step 8：导入管线打标签（3 条路径）
+  - 标准化管线 / 分诊恢复 / 原生嵌入管线完成后自动写入 `AssetCustoms_ConfigProfile` metadata tag
+- [x] Step 9：右键菜单 View/Set/Clear
+  - Content Browser 右键菜单支持查看/设置/清除 metadata tag
+- [x] Step 10：SP 发送配置驱动映射
+  - Send to SP 时读取 tag → 加载 config → 用 `parameter_bindings` 动态生成通道映射
+- 测试：AssetCustoms 56 passed, SPsync 122 passed
+
+### Phase 5：Per-Material Profile + 多 TextureSet ✅（2026-03-25）
+
+- [x] Step 11：per-MI tag 读取 + `material_slot_name` 注入数据包
+- [x] Step 12：`all_texture_sets()` 多 TextureSet 分发 + slot_name 优先匹配
+- [x] Step 13：`match_material_to_textureset(mat_name, ts_names, slot_name)` 5 级策略
+  - 关键修正：匹配关系从 MI 名→TextureSet 改为 slot_name→TextureSet
+- 测试：AssetCustoms 56 passed, SPsync 139 passed (+17 新增)
+
+### Phase 6：Grayscale Conversion Filter 通道拆分 ✅（2026-03-25）
+
+- [x] Step 15a：`parse_channel_suffix()` + `resolve_packed_channels()`（sp_channel_map.py）
+- [x] Step 15b：`_find_grayscale_filter()` + `_create_fill_with_filter()`（sp_receive.py）
+  - 重写为 per-channel source 方式，支持 Packed Texture MRO 在 SP 中自动拆分
+- [x] Bug Fix：Config 文件通道后缀格式更新（Prop.jsonc, Character.jsonc）
+- [x] Bug Fix：`extract_channels_from_materials()` 打包通道展开
+- 测试：SPsync 162 passed, AssetCustoms core 103 passed
+
+### Round-Trip Sync（SP → UE 贴图回传）✅（2026-03-25）
+
+> 设计文档：[ROUNDTRIP_SYNC.md](SPsync/doc/ROUNDTRIP_SYNC.md)
+
+- [x] 5A：`build_roundtrip_metadata()` — SP 项目元数据存储 UE 材质定义
+- [x] 5B：`build_roundtrip_export_maps/config/refresh_list()` — 动态导出配置生成
+- [x] 5C：`refresh_textures()` + `sync_ue_refresh_textures()` — UE 侧按原路径刷新
+- [x] 5D：`sp_sync_export.py` roundtrip 模式集成（自动检测元数据）
+- [x] Bug Fix：rootPath mismatch → `texture_set_name` 三层 fallback
+- [x] Bug Fix：Bootstrap `.py` + button lock + logging + UI path（4 处）
+- [x] Bug Fix：BaseColor 导出黑色 → `srcMapName`/`srcChannel` 格式改用 ChannelType 名
+- [x] Bug Fix：AO srcMapName "ao" → "ambientOcclusion"（probe 脚本验证）
+- [x] Bug Fix：标准导出 metallic 异常 → `sync_textures(roundtrip=False)` 跳过自动检测
+- [x] Bug Fix：Emissive BCO fallback → 材质实例仅在 `emissive_type=True` 时设置 ES 参数
+- 测试：SPsync 185 passed
   - UE 右键发送 → SP 创建项目 + Layer → 编辑 → 导出 → 自动回传 UE
   - 验证回传贴图格式、命名、材质绑定
   - 测试：🔄 完整主链路 + 异常场景矩阵（SP 未启动 / SM 无材质 / 多材质槽 / UDIM）

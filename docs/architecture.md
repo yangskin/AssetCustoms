@@ -2,10 +2,11 @@
 
 本项目位于 Unreal Engine 插件的 Python 侧，主要用于资源处理与工具自动化，围绕“静默成功，响亮失败”的 UX 模型构建。
 
-> 实现状态（2026-03-23）
+> 实现状态（2026-03-25）
 > - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR4 分诊 UI ✅（PySide6 TriageWindow + TriageDecision + 8 项单测 + 视觉验证）；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
 > - 已完成：M3 质量与体验 ✅（NFR1 性能预算 + NFR3 健壮性 + NFR4 无配置 UI 禁用）；M4 批处理 ✅；Config Editor GUI（Round 1-5，含多语言支持）。
 > - 已完成：M6 Send to Photoshop ✅（Content Browser 右键 → Send → Send to Photoshop，PSD 导出/监控/自动回写）。
+> - 已完成：M7 Send to Substance Painter ✅（Content Browser 右键 → Send → Send to Substance Painter，含 Config Profile Tag / 多 TextureSet / Grayscale Filter / Round-Trip Sync，SPsync 185 tests passed）。
 > - 健壮性审计（2026-03-23）：修复 7 项问题（tick 定时器、内存泄漏、静默异常、输入校验等），详见「健壮性与稳定性审计」章节。
 > - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 + psd-tools 1.14.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
 
@@ -43,7 +44,7 @@
 - 注册：`ui.py._register_asset_context_menu()` 在 `ContentBrowser.AssetContextMenu` 添加 Send 子菜单
 - 入口：`actions.py.on_send_to_photoshop()` → 懒加载 PhotoshopBridge 单例
 
-## 模块 G：外部编辑器桥接（Send to Substance Painter）— 计划中
+## 模块 G：外部编辑器桥接（Send to Substance Painter）✅
 
 > 设计文档：[ADR-0004](./decisions/ADR-0004-send-to-substance-painter.md)
 
@@ -66,21 +67,31 @@ sp_bridge.py                                   sp_receive.py
                                                │   ├── fill.set_source(ChannelType, ResourceID)
 sp_remote.py (RemotePainter)                   │   └── 配置 export preset
 ├── base64 encode + HTTP POST → :60041         │
-└── 连接检测 + 错误处理                          └── 用户编辑 → sp_sync_export（现有回传）
+└── 连接检测 + 错误处理                          └── 用户编辑 → sp_sync_export（回传）
 ```
 
 ### 通信方式
 
 - **UE→SP**：HTTP POST base64(python_script) 至 SP Remote Scripting API（localhost:60041）
-- **SP→UE**：SPsync 现有链路（Remote Execution TCP 6776），**零改动**
+- **SP→UE**：SPsync 现有链路（Remote Execution TCP 6776）
+  - 标准模式：SPSYNCDefault 预设导出 → 新建贴图/材质
+  - 回传模式（Round-Trip）：自动检测 metadata → 动态生成导出配置 → 刷新 UE 原贴图
 
-### 新增文件
+### 已实现文件
 
 | 文件 | 位置 | 职责 |
 |------|------|------|
-| `sp_bridge.py` | `unreal_integration/` | SPBridge 类：材质收集 + FBX/贴图导出 + 数据包组装 |
-| `sp_remote.py` | `unreal_integration/` | RemotePainter 类：HTTP 客户端（从 Reference/lib_remote.py 移入） |
-| `sp_receive.py` | SPsync 插件目录 | 接收模块：项目创建 + Layer + 通道分配 + 导出预设 |
+| `sp_bridge.py` | `unreal_integration/` | SPBridge 类：材质收集 + FBX/贴图导出 + 数据包组装（27 tests） |
+| `sp_remote.py` | `unreal_integration/` | RemotePainter 类：HTTP 客户端（28 tests） |
+| `sp_receive.py` | SPsync 插件目录 | 接收模块：项目创建 + Layer + 通道分配 + 导出预设 + Grayscale Filter + Metadata 存储（24 tests） |
+| `sp_channel_map.py` | SPsync 插件目录 | UE↔SP 通道映射 + packed 通道解析 + roundtrip 导出配置生成（31 tests） |
+
+### 关键功能
+
+- **Config Profile Metadata Tag**：导入管线自动写入 `AssetCustoms_ConfigProfile` tag → Send to SP 时读取 → 动态通道映射
+- **Per-Material Profile**：多材质槽 SM 每个 MI 独立 Profile → 多 TextureSet 分发 + slot_name 匹配
+- **Grayscale Conversion Filter**：Packed Texture (MRO) 在 SP 中自动拆分为独立通道
+- **Round-Trip Sync**：SP 项目 Metadata 存储 UE 材质定义 → SYNC 时自动按原格式导出 → 刷新 UE 原贴图
 
 ### 依赖
 
@@ -88,7 +99,7 @@ sp_remote.py (RemotePainter)                   │   └── 配置 export pre
 - SPsync 插件必须已安装并启用
 - AssetCustoms vendor_libs 已部署（PIL 用于贴图格式转换）
 
-### Config Profile Metadata Tag（计划中）
+### Config Profile Metadata Tag
 
 > 设计文档：[ADR-0005](./decisions/ADR-0005-config-profile-metadata-tag.md)
 
@@ -134,8 +145,8 @@ AssetCustoms/                      # 插件根目录（当前仓库根）
   │       │   ├─ ui.py             # 菜单/工具栏注册
   │       │   ├─ import_pipeline.py # FR2-FR5 导入管线
   │       │   ├─ photoshop_bridge.py # Send to Photoshop (M6)
-  │       │   ├─ sp_bridge.py      # Send to Substance Painter (M7, 计划中)
-  │       │   └─ sp_remote.py      # SP HTTP 客户端 (M7, 计划中)
+  │       │   ├─ sp_bridge.py      # Send to Substance Painter (M7)
+  │       │   └─ sp_remote.py      # SP HTTP 客户端 (M7)
   │       └─ unreal_qt/            # PySide6 Qt 集成层（详见下方）
   │           ├─ __init__.py       # QApplication 管理 / tick 挂载 / widget 生命周期
   │           └─ dark_bar.py       # 无边框暗色标题栏（DarkBar / FramelessWindow）

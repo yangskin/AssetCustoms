@@ -450,3 +450,56 @@ SPsync/
 | vg_painter_utilities | `Reference/vg_painter_utilities-main/` | Adobe 员工生产级 layerstack/export 代码 |
 | SP Python API 源码 | `C:\Program Files\Adobe\...\substance_painter\` | layerstack/resource/export/textureset 模块 |
 | SPsync 插件 | SP 安装目录 `python/plugins/SPsync/` | 现有 SP→UE 回传链路 |
+
+---
+
+## 12. 实施结果（2026-03-25 追记）
+
+### 12.1 原始设计 vs 实际实现
+
+原始设计覆盖 Phase 1-3（Step 1-7），实际实现过程中追加了以下阶段：
+
+| 追加阶段 | 原因 | 涉及变更 |
+|----------|------|----------|
+| Phase 4：Config Profile Metadata Tag | 消除硬编码通道映射，改为 config 驱动 | ADR-0005，`actions.py`/`sp_bridge.py` 读取 tag |
+| Phase 5：Per-Material Profile + 多 TextureSet | 多材质槽 SM 需要独立 profile | `sp_receive.py` 多 TextureSet 分发 + slot_name 匹配 |
+| Phase 6：Grayscale Conversion Filter | Packed Texture (MRO) 拆分为独立通道 | `sp_receive.py` filter 创建 + `sp_channel_map.py` 通道后缀解析 |
+| Round-Trip Sync | 支持 SP→UE 贴图回传（覆盖原贴图） | metadata 存储 + 动态导出配置 + UE 刷新脚本 |
+
+### 12.2 通信架构偏差
+
+原始方案 A（SP Remote Scripting 被动接收）**完全落地**，无架构偏差。
+SP→UE 回传链路原设计为「零改动」，实际在 Round-Trip Sync 中对 `sp_sync_export.py` 添加了 roundtrip 模式检测（`sync_textures(roundtrip)` 参数），但不影响原有标准导出流程。
+
+### 12.3 重要 Bug 修复
+
+| Bug | 根因 | 修复 |
+|-----|------|------|
+| BaseColor 导出黑色 | `srcMapName`/`srcChannel` 格式不匹配 SP 导出引擎要求 | 改用 ChannelType 名 + 单字符 destChannel/srcChannel |
+| AO srcMapName 错误 | `.lower()` 产生 "ao"，SP 期望 "ambientOcclusion" | `_SP_SRC_MAP_NAME` 查找表（probe 脚本验证） |
+| Normal 导出异常 | Normal 是 virtualMap 而非 documentMap | srcMapType 区分 + srcMapName="Normal_DirectX" |
+| 标准导出 metallic 异常 | `sync_textures()` 自动检测到 roundtrip metadata 跳过预设 | 新增 `roundtrip: bool | None` 参数，`sync_mesh()` 传 `False` |
+| Emissive BCO fallback | ES 贴图不存在时 BCO 被设为 ES 参数 + intensity=1 | 材质实例仅在 `emissive_type=True` 时获取 ES 参数 |
+
+### 12.4 最终测试计数
+
+| 项目 | 测试数 | 说明 |
+|------|--------|------|
+| AssetCustoms（UE 侧） | 56 passed | sp_remote 28 + sp_bridge 27 + actions 1 |
+| SPsync（SP 侧） | 185 passed | sp_receive 24 + sp_channel_map 31 + roundtrip + 原有测试 |
+| **合计自动化** | **241** | |
+| 待人工 E2E | Step 7 | UE + SP 完整往返验证 |
+
+### 12.5 新增文件（补充 §6 清单）
+
+Phase 4-6 + Round-Trip 新增/修改的文件（超出原始设计范围）：
+
+| 文件 | 变更类型 | 说明 |
+|------|----------|------|
+| `sp_channel_map.py` (SPsync) | 大量新增 | `parse_channel_suffix()`, `resolve_packed_channels()`, `build_roundtrip_export_maps/config/refresh_list()`, `_SP_SRC_MAP_NAME` |
+| `sp_receive.py` (SPsync) | 大量新增 | `_create_fill_with_filter()`, `_ensure_channel_exists()`, `_build_roundtrip_metadata()`, 多 TextureSet 分发 |
+| `sp_sync_export.py` (SPsync) | 修改 | `sync_textures(roundtrip)` 参数 + roundtrip 模式集成 |
+| `sp_sync_ue.py` (SPsync) | 新增方法 | `sync_ue_refresh_textures()` UE 刷新入口 |
+| `import_textures_ue.py` (SPsync) | 新增函数 | `refresh_textures()` 按原路径刷新 |
+| `create_material_and_connect_textures.py` (SPsync) | Bug Fix | emissive BCO fallback 修复 |
+| `tests/test_roundtrip.py` (SPsync) | 新增 | roundtrip 导出配置 + metadata + refresh list 测试 |

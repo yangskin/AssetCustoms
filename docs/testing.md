@@ -47,9 +47,11 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
 - 若提示 `pytest 未安装`：请确认已执行依赖安装命令。
 - 若导入路径报错：测试已自动将 `Content/Python` 加到 `sys.path`，通常无需手动设置。
 
-## 测试状态（2026-03-23）
+## 测试状态（2026-03-25）
 - 环境：Windows / Python 3.11.8 / pytest 8.4.2
-- 结果：86 passed, 20 skipped（共 106 项用例）
+- AssetCustoms Core：103 passed, 20 skipped（共 123 项用例）
+- AssetCustoms 全量（含 M7 UE 侧）：56 passed
+- SPsync（含 M7 SP 侧 + Round-Trip Sync）：185 passed
 - 跳过原因：20 项 `test_standardize` 依赖 Pillow（测试环境未安装时自动跳过）
 - 覆盖范围：
   - 配置解析（JSONC / Schema v1.1 / loader）
@@ -58,3 +60,6 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
   - 检查链（check_chain: asset_count / master_material / texture_mapping）
   - 标准化引擎（process_textures / flip_green / resize）
   - 分诊 UI（TriageWindow / TriageDecision / 回调）
+  - M7 SP Bridge（sp_remote: base64/HTTP mock，sp_bridge: JSON schema/序列化/数据包）
+  - M7 SP Receive（JSON 解析/校验、导出配置生成、通道映射、Grayscale Filter）
+  - M7 Round-Trip Sync（metadata 构建、roundtrip 导出配置、refresh list、srcMapName 映射）
