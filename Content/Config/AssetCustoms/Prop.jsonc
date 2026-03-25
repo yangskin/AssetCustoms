@@ -25,7 +25,8 @@
         "Roughness":        { "priority": 9,  "patterns": ["*_R.*", "*_R_*", "*_Rough.*", "*_Rough_*", "*_Roughness.*", "*_Roughness_*"] },
         "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
         "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
-        "Height":           { "priority": 7,  "patterns": ["*_H.*", "*_H_*", "*_Height.*", "*_Height_*", "*_Displacement.*", "*_Displacement_*"] }
+        "Height":           { "priority": 7,  "patterns": ["*_H.*", "*_H_*", "*_Height.*", "*_Height_*", "*_Displacement.*", "*_Displacement_*"] },
+        "Emissive":         { "priority": 7,  "patterns": ["*_E.*", "*_E_*", "*_Emissive.*", "*_Emissive_*", "*_Emission.*", "*_Emission_*"] }
       }
     }
     // 🔮 mesh / material 预留
@@ -140,6 +141,24 @@
         "bit_depth": 16,
         "srgb": false,
         "mips": true
+      },
+      {
+        // --- 自发光（Emissive）---
+        "enabled": true,
+        "name": "Emissive",
+        "suffix": "E",
+        "category": "PBR",
+        "channels": {
+          "R": { "from": "Emissive", "ch": "R", "constant": 0.0 },
+          "G": { "from": "Emissive", "ch": "G", "constant": 0.0 },
+          "B": { "from": "Emissive", "ch": "B", "constant": 0.0 },
+          "A": { "constant": 1.0 }
+        },
+        "allow_missing": true,
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": true,
+        "mips": true
       }
     ]
   },
@@ -169,10 +188,9 @@
       "parameter_bindings": {
         "D":   "BaseColor_Texture",
         "N":   "Normal_Texture",
-        "M":   "Packed_Texture.R",
-        "R":   "Packed_Texture.G",
-        "AO":  "Packed_Texture.B",
-        "H":   "Height_Texture"
+        "MRO": "Packed_Texture",
+        "H":   "Height_Texture",
+        "E":   "Emissive_Texture"
       }
     },
 
@@ -188,7 +206,8 @@
     "texture_import_overrides": {
       "N":   { "compression": "TC_Normalmap", "lod_group": "TEXTUREGROUP_WorldNormalMap" },
       "MRO": { "compression": "TC_Masks" },
-      "H":   { "compression": "TC_Grayscale" }
+      "H":   { "compression": "TC_Grayscale" },
+      "E":   { "srgb": true }
     }
   }
 }

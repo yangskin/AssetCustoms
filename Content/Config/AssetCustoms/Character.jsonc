@@ -24,7 +24,8 @@
         "Metallic":         { "priority": 9,  "patterns": ["*_M.*", "*_M_*", "*_Metal.*", "*_Metal_*", "*_Metallic.*", "*_Metallic_*"] },
         "AmbientOcclusion": { "priority": 8,  "patterns": ["*_AO.*", "*_AO_*", "*_AmbientOcclusion.*", "*_AmbientOcclusion_*"] },
         "SubsurfaceColor":  { "priority": 8,  "patterns": ["*_SSS.*", "*_SSS_*", "*_Subsurface.*", "*_Subsurface_*"] },
-        "Opacity":          { "priority": 7,  "patterns": ["*_O.*", "*_O_*", "*_Opacity.*", "*_Opacity_*", "*_Alpha.*", "*_Alpha_*"] }
+        "Opacity":          { "priority": 7,  "patterns": ["*_O.*", "*_O_*", "*_Opacity.*", "*_Opacity_*", "*_Alpha.*", "*_Alpha_*"] },
+        "Emissive":         { "priority": 7,  "patterns": ["*_E.*", "*_E_*", "*_Emissive.*", "*_Emissive_*", "*_Emission.*", "*_Emission_*"] }
       }
     }
   },
@@ -142,6 +143,24 @@
         "bit_depth": 8,
         "srgb": true,
         "mips": true
+      },
+      {
+        // --- 自发光（Emissive）---
+        "enabled": true,
+        "name": "Emissive",
+        "suffix": "E",
+        "category": "Character",
+        "channels": {
+          "R": { "from": "Emissive", "ch": "R", "constant": 0.0 },
+          "G": { "from": "Emissive", "ch": "G", "constant": 0.0 },
+          "B": { "from": "Emissive", "ch": "B", "constant": 0.0 },
+          "A": { "constant": 1.0 }
+        },
+        "allow_missing": true,
+        "format": "PNG",
+        "bit_depth": 8,
+        "srgb": true,
+        "mips": true
       }
     ]
   },
@@ -170,10 +189,9 @@
       "parameter_bindings": {
         "D":   "BaseColor_Texture",
         "N":   "Normal_Texture",
-        "M":   "Packed_Texture.R",
-        "R":   "Packed_Texture.G",
-        "AO":  "Packed_Texture.B",
-        "SSS": "SubsurfaceColor_Texture"
+        "MRO": "Packed_Texture",
+        "SSS": "SubsurfaceColor_Texture",
+        "E":   "Emissive_Texture"
       }
     },
 
@@ -188,7 +206,8 @@
 
     "texture_import_overrides": {
       "N":   { "compression": "TC_Normalmap", "lod_group": "TEXTUREGROUP_CharacterNormalMap" },
-      "MRO": { "compression": "TC_Masks" }
+      "MRO": { "compression": "TC_Masks" },
+      "E":   { "srgb": true }
     }
   }
 }

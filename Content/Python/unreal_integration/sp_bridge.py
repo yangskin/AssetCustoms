@@ -380,13 +380,14 @@ class SPBridge:
 
         # ── Mesh 级别 Config Profile tag（作为 fallback）──
         sm_bindings: dict[str, str] = {}
+        sm_tex_defs: list[dict] = []
         sm_profile_name = ""
         try:
             tag_value = unreal.EditorAssetLibrary.get_metadata_tag(mesh, "AssetCustoms_ConfigProfile")
             if tag_value:
                 sm_profile_name = tag_value
                 unreal.log(f"[AssetCustoms][SP] {mesh_type} ConfigProfile tag = '{sm_profile_name}'")
-                sm_bindings = self._load_parameter_bindings(sm_profile_name, unreal)
+                sm_bindings, sm_tex_defs = self._load_config_for_sp(sm_profile_name, unreal)
             else:
                 unreal.log(f"[AssetCustoms][SP] {mesh_type} 无 ConfigProfile tag")
         except Exception as e:
@@ -415,13 +416,14 @@ class SPBridge:
 
                 # ── 读取 MI 级别 Config Profile tag ──
                 mi_bindings: dict[str, str] = {}
+                mi_tex_defs: list[dict] = []
                 mi_profile_name = ""
                 try:
                     mi_tag = unreal.EditorAssetLibrary.get_metadata_tag(material, "AssetCustoms_ConfigProfile")
                     if mi_tag:
                         mi_profile_name = mi_tag
                         unreal.log(f"[AssetCustoms][SP]     MI ConfigProfile = '{mi_profile_name}'")
-                        mi_bindings = self._load_parameter_bindings(mi_profile_name, unreal)
+                        mi_bindings, mi_tex_defs = self._load_config_for_sp(mi_profile_name, unreal)
                     else:
                         unreal.log(f"[AssetCustoms][SP]     MI 无 ConfigProfile tag，使用 SM fallback")
                 except Exception as e:
@@ -451,11 +453,14 @@ class SPBridge:
                     "material_path": mat_path,
                     "textures": textures,
                 }
-                # 注入 per-MI 的 bindings（优先 MI 自身 tag，fallback SM tag）
+                # 注入 per-MI 的 bindings 和 texture_definitions（优先 MI 自身 tag，fallback SM tag）
                 effective_bindings = mi_bindings or sm_bindings
+                effective_tex_defs = mi_tex_defs or sm_tex_defs
                 effective_profile = mi_profile_name or sm_profile_name
                 if effective_bindings:
                     mat_entry["parameter_bindings"] = effective_bindings
+                if effective_tex_defs:
+                    mat_entry["texture_definitions"] = effective_tex_defs
                 if effective_profile:
                     mat_entry["config_profile"] = effective_profile
 
@@ -467,18 +472,20 @@ class SPBridge:
             "static_mesh_path": sm_path,
             "materials": materials_list,
         }
-        # SM 级别 bindings 作为顶层 fallback（兼容旧版 SP 侧）
+        # SM 级别 bindings + texture_definitions 作为顶层 fallback（兼容旧版 SP 侧）
         if sm_bindings:
             data["parameter_bindings"] = sm_bindings
             unreal.log(f"[AssetCustoms][SP] SM fallback parameter_bindings: {sm_bindings}")
+        if sm_tex_defs:
+            data["texture_definitions"] = sm_tex_defs
         if sm_profile_name:
             data["config_profile"] = sm_profile_name
 
         return json.dumps(data, indent=4, ensure_ascii=False)
 
     @staticmethod
-    def _load_parameter_bindings(profile_name: str, unreal) -> dict[str, str]:
-        """根据 profile 名加载配置并返回 parameter_bindings（suffix→MI 参数名）。"""
+    def _load_config_for_sp(profile_name: str, unreal) -> tuple[dict[str, str], list[dict]]:
+        """根据 profile 名加载配置并返回 (parameter_bindings, texture_definitions)。"""
         import os
         from core.config.loader import load_config
 
@@ -501,13 +508,37 @@ class SPBridge:
                 cfg_path = os.path.join(cfg_dir, f"{profile_name}{ext}")
                 if os.path.isfile(cfg_path):
                     config = load_config(cfg_path)
-                    bindings = config.output.material.parameter_bindings
+                    bindings = dict(config.output.material.parameter_bindings)
+                    # 将 texture_definitions 序列化为可 JSON 化的 dict 列表
+                    tex_defs = []
+                    for td in config.processing.texture_definitions:
+                        channels_dict = {}
+                        for k, v in td.channels.items():
+                            if hasattr(v, '__dataclass_fields__'):
+                                # ChannelDef dataclass → 只保留 JSON 需要的字段
+                                ch_d: dict = {"ch": v.ch}
+                                if v.source:
+                                    ch_d["from"] = v.source
+                                if v.constant is not None:
+                                    ch_d["constant"] = v.constant
+                                channels_dict[k] = ch_d
+                            elif isinstance(v, dict):
+                                channels_dict[k] = dict(v)
+                            else:
+                                channels_dict[k] = v
+                        td_dict = {
+                            "suffix": td.suffix,
+                            "name": td.name,
+                            "channels": channels_dict,
+                        }
+                        tex_defs.append(td_dict)
                     unreal.log(f"[AssetCustoms][SP] 已加载配置 {cfg_path}")
                     unreal.log(f"[AssetCustoms][SP]   parameter_bindings = {bindings}")
-                    return dict(bindings)
+                    unreal.log(f"[AssetCustoms][SP]   texture_definitions = {len(tex_defs)} 个")
+                    return bindings, tex_defs
 
         unreal.log_warning(f"[AssetCustoms][SP] 未找到配置文件: {profile_name}")
-        return {}
+        return {}, []
 
     def _export_mesh_fbx(self, mesh) -> str | None:
         """导出 StaticMesh 或 SkeletalMesh 为 FBX。"""
