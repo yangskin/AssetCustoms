@@ -97,6 +97,35 @@ def update_texture_export_paths(material_info: dict, export_map: dict[str, str])
     return material_info
 
 
+def update_texture_sizes_from_exports(material_info: dict) -> dict:
+    """从导出文件读取实际像素尺寸并更新 texture_size。
+
+    AssetExportTask 以源分辨率导出，而 blueprint_get_size_x/y() 返回的是
+    受 max_texture_size / LOD bias 影响的运行时尺寸。此函数以导出文件为准
+    覆盖 texture_size，确保 SP 端拿到真实分辨率。
+
+    Returns:
+        更新后的材质信息字典（原地修改+返回）。
+    """
+    try:
+        from PIL import Image  # type: ignore
+    except ImportError:
+        return material_info
+
+    for mat in material_info.get("materials", []):
+        for tex in mat.get("textures", []):
+            export_path = tex.get("texture_export_path", "")
+            if not export_path or not os.path.isfile(export_path):
+                continue
+            try:
+                with Image.open(export_path) as img:
+                    w, h = img.size
+                    tex["texture_size"] = max(w, h)
+            except Exception:
+                pass  # 保留 blueprint_get_size_x/y 的值作为 fallback
+    return material_info
+
+
 def build_sp_script(material_info_json: str, mesh_export_path: str) -> str:
     """构建发送到 SP 端执行的 Python 脚本。
 
@@ -342,6 +371,7 @@ class SPBridge:
         texture_paths = collect_texture_paths(material_info)
         export_map = self._export_textures(texture_paths)
         update_texture_export_paths(material_info, export_map)
+        update_texture_sizes_from_exports(material_info)
 
         # 重新序列化（含导出路径）
         updated_json = json.dumps(material_info, indent=4, ensure_ascii=False)
@@ -439,12 +469,15 @@ class SPBridge:
                     if texture and isinstance(texture, unreal.Texture2D):
                         tex_path = unreal.EditorAssetLibrary.get_path_name_for_loaded_asset(texture)
                         tex_name = texture.get_name()
-                        unreal.log(f"[AssetCustoms][SP]     贴图 param={prop_name}  name={tex_name}")
+                        tex_size_x = texture.blueprint_get_size_x()
+                        tex_size_y = texture.blueprint_get_size_y()
+                        unreal.log(f"[AssetCustoms][SP]     贴图 param={prop_name}  name={tex_name}  size={tex_size_x}x{tex_size_y}")
                         textures.append({
                             "texture_property_name": prop_name,
                             "texture_path": tex_path,
                             "texture_export_path": "",
                             "texture_name": tex_name,
+                            "texture_size": max(tex_size_x, tex_size_y),
                         })
 
                 mat_entry: dict = {
@@ -531,6 +564,14 @@ class SPBridge:
                             "name": td.name,
                             "channels": channels_dict,
                         }
+                        # 使用交付阶段的 max_resolution（output defaults + overrides）
+                        output_defaults = config.output.texture_import_defaults
+                        resolved_max_res = output_defaults.max_resolution
+                        suffix_overrides = config.output.texture_import_overrides.get(td.suffix, {})
+                        if "max_resolution" in suffix_overrides:
+                            resolved_max_res = suffix_overrides["max_resolution"]
+                        if resolved_max_res:
+                            td_dict["max_resolution"] = resolved_max_res
                         tex_defs.append(td_dict)
                     unreal.log(f"[AssetCustoms][SP] 已加载配置 {cfg_path}")
                     unreal.log(f"[AssetCustoms][SP]   parameter_bindings = {bindings}")

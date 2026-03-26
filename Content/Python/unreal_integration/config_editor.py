@@ -144,6 +144,9 @@ _TR: dict[str, dict[str, str]] = {
     "def_flip_g_tip":        {"en": "Invert normal G channel", "zh": "反转法线 G 通道"},
     "def_alpha_pre":         {"en": "Alpha Premultiplied", "zh": "预乘 Alpha"},
     "def_normal_sp":         {"en": "Normal Space", "zh": "法线空间"},
+    "def_max_res":           {"en": "Max Resolution", "zh": "最大分辨率"},
+    "def_max_res_tip":       {"en": "Max texture resolution (square, POT). Empty = no limit.",
+                              "zh": "最大贴图分辨率（正方形，2 的幂）。留空 = 不限制。"},
     "grp_channels":          {"en": "Channel Mapping", "zh": "通道映射"},
     # Output tab
     "grp_paths":             {"en": "Paths", "zh": "路径"},
@@ -362,6 +365,8 @@ VERTEX_COLOR_OPTIONS = ["Replace", "Ignore", "Override"]
 MESH_LOD_GROUPS = ["None", "LargeWorld", "SmallProp", "MediumProp"]
 IMPORT_CONTENT_TYPES = ["All", "Geometry", "SkinningWeights"]
 CHANNEL_NAMES = ["R", "G", "B", "A"]
+# 贴图最大分辨率选项（POT）
+MAX_RESOLUTION_OPTIONS = ["", "256", "512", "1024", "2048", "4096", "8192"]
 # 常见逻辑源名
 COMMON_SOURCES = [
     "", "BaseColor", "Normal", "Roughness", "Metallic",
@@ -780,6 +785,8 @@ class ImportOverrideCard(QtWidgets.QGroupBox):
         imp_row.addWidget(self.w_addr_y)
         self.w_mipgen = LabeledCombo(_t("imp_mipgen"), [""] + MIP_GEN_MODES, "")
         imp_row.addWidget(self.w_mipgen)
+        self.w_max_res = LabeledCombo(_t("def_max_res"), MAX_RESOLUTION_OPTIONS, "", _t("def_max_res_tip"))
+        imp_row.addWidget(self.w_max_res)
         lay.addLayout(imp_row)
 
         btn_row = QtWidgets.QHBoxLayout()
@@ -807,6 +814,9 @@ class ImportOverrideCard(QtWidgets.QGroupBox):
             d["address_y"] = self.w_addr_y.value()
         if self.w_mipgen.value():
             d["mip_gen"] = self.w_mipgen.value()
+        res_str = self.w_max_res.value()
+        if res_str:
+            d["max_resolution"] = int(res_str)
         return suffix, d
 
     def from_data(self, suffix: str, d: dict) -> None:
@@ -819,6 +829,14 @@ class ImportOverrideCard(QtWidgets.QGroupBox):
         self.w_addr_x.set_value(d.get("address_x", ""))
         self.w_addr_y.set_value(d.get("address_y", ""))
         self.w_mipgen.set_value(d.get("mip_gen", ""))
+        mr = d.get("max_resolution")
+        if mr and isinstance(mr, int):
+            self.w_max_res.set_value(str(mr))
+        elif mr and isinstance(mr, dict):
+            val = max(mr.get("width", 0), mr.get("height", 0))
+            self.w_max_res.set_value(str(val) if val else "")
+        else:
+            self.w_max_res.set_value("")
 
     def retranslate(self) -> None:
         self.w_suffix._lbl.setText(_t("override_suffix"))
@@ -828,6 +846,8 @@ class ImportOverrideCard(QtWidgets.QGroupBox):
         self.w_addr_x._lbl.setText(_t("imp_addr_x"))
         self.w_addr_y._lbl.setText(_t("imp_addr_y"))
         self.w_mipgen._lbl.setText(_t("imp_mipgen"))
+        self.w_max_res._lbl.setText(_t("def_max_res"))
+        self.w_max_res._lbl.setToolTip(_t("def_max_res_tip"))
         self._btn_del.setText(_t("btn_del_override"))
 
 
@@ -887,6 +907,13 @@ class OutputDefCard(QtWidgets.QGroupBox):
         row4.addWidget(self.w_normal_space)
         lay.addLayout(row4)
 
+        # 最大分辨率
+        row5 = QtWidgets.QHBoxLayout()
+        self.w_max_res = LabeledCombo(_t("def_max_res"), MAX_RESOLUTION_OPTIONS, "", _t("def_max_res_tip"))
+        row5.addWidget(self.w_max_res)
+        row5.addStretch()
+        lay.addLayout(row5)
+
         # 通道映射
         self._grp_channels = QtWidgets.QGroupBox("Channel Mapping")
         ch_lay = QtWidgets.QVBoxLayout(self._grp_channels)
@@ -925,6 +952,10 @@ class OutputDefCard(QtWidgets.QGroupBox):
         ns = self.w_normal_space.value()
         if ns:
             d["normal_space"] = ns
+        # max_resolution
+        res_str = self.w_max_res.value()
+        if res_str:
+            d["max_resolution"] = int(res_str)
         d["channels"] = {ch: row.to_dict() for ch, row in self.ch_rows.items()}
         return d
 
@@ -941,6 +972,16 @@ class OutputDefCard(QtWidgets.QGroupBox):
         self.w_flip_green.set_value(d.get("flip_green", False))
         self.w_alpha_pre.set_value(d.get("alpha_premultiplied", False))
         self.w_normal_space.set_value(d.get("normal_space", "") or "")
+        # max_resolution
+        mr = d.get("max_resolution")
+        if mr and isinstance(mr, int):
+            self.w_max_res.set_value(str(mr))
+        elif mr and isinstance(mr, dict):
+            # 兼容旧格式
+            val = max(mr.get("width", 0), mr.get("height", 0))
+            self.w_max_res.set_value(str(val) if val else "")
+        else:
+            self.w_max_res.set_value("")
         channels = d.get("channels", {})
         for ch, row in self.ch_rows.items():
             if ch in channels:
@@ -973,6 +1014,8 @@ class OutputDefCard(QtWidgets.QGroupBox):
         self.w_flip_green.check.setToolTip(_t("def_flip_g_tip"))
         self.w_alpha_pre.check.setText(_t("def_alpha_pre"))
         self.w_normal_space._lbl.setText(_t("def_normal_sp"))
+        self.w_max_res._lbl.setText(_t("def_max_res"))
+        self.w_max_res._lbl.setToolTip(_t("def_max_res_tip"))
         self._grp_channels.setTitle(_t("grp_channels"))
         self._btn_del.setText(_t("btn_del_def"))
         for row in self.ch_rows.values():
@@ -1442,6 +1485,14 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_imp_mipgen = LabeledCombo("Mip Gen", MIP_GEN_MODES, "FromTextureGroup")
         imp_row.addWidget(self.w_imp_mipgen)
         g_imp_lay.addLayout(imp_row)
+        # 交付最大分辨率
+        imp_res_row = QtWidgets.QHBoxLayout()
+        self.w_imp_max_res = LabeledCombo(
+            _t("def_max_res") + " (Delivery)", MAX_RESOLUTION_OPTIONS, "",
+            _t("def_max_res_tip"))
+        imp_res_row.addWidget(self.w_imp_max_res)
+        imp_res_row.addStretch()
+        g_imp_lay.addLayout(imp_res_row)
         lay.addWidget(g_imp)
 
         # 导入覆盖
@@ -1738,6 +1789,15 @@ class ConfigEditorWindow(QtWidgets.QWidget):
         self.w_imp_addr_x.set_value(imp_def.get("address_x", "Wrap"))
         self.w_imp_addr_y.set_value(imp_def.get("address_y", "Wrap"))
         self.w_imp_mipgen.set_value(imp_def.get("mip_gen", "FromTextureGroup"))
+        imp_mr = imp_def.get("max_resolution")
+        if imp_mr and isinstance(imp_mr, int):
+            self.w_imp_max_res.set_value(str(imp_mr))
+        elif imp_mr and isinstance(imp_mr, dict):
+            # 兼容旧格式
+            val = max(imp_mr.get("width", 0), imp_mr.get("height", 0))
+            self.w_imp_max_res.set_value(str(val) if val else "")
+        else:
+            self.w_imp_max_res.set_value("")
 
         self._clear_override_cards()
         for suffix, ovr_d in out.get("texture_import_overrides", {}).items():
@@ -1754,6 +1814,19 @@ class ConfigEditorWindow(QtWidgets.QWidget):
             suffix, d = card.to_tuple()
             if suffix and d:
                 overrides[suffix] = d
+
+        # Build texture import defaults (including delivery max_resolution)
+        tid: dict[str, Any] = {
+            "compression": self.w_imp_compression.value(),
+            "lod_group": self.w_imp_lod_group.value(),
+            "virtual_texture": self.w_imp_vt.value(),
+            "address_x": self.w_imp_addr_x.value(),
+            "address_y": self.w_imp_addr_y.value(),
+            "mip_gen": self.w_imp_mipgen.value(),
+        }
+        imp_res = self.w_imp_max_res.value()
+        if imp_res:
+            tid["max_resolution"] = int(imp_res)
 
         data: dict[str, Any] = {
             "config_version": "2.0",
@@ -1819,14 +1892,7 @@ class ConfigEditorWindow(QtWidgets.QWidget):
                     "master_material_path": self.w_master_mat.value(),
                     "parameter_bindings": self._param_bindings.to_dict(),
                 },
-                "texture_import_defaults": {
-                    "compression": self.w_imp_compression.value(),
-                    "lod_group": self.w_imp_lod_group.value(),
-                    "virtual_texture": self.w_imp_vt.value(),
-                    "address_x": self.w_imp_addr_x.value(),
-                    "address_y": self.w_imp_addr_y.value(),
-                    "mip_gen": self.w_imp_mipgen.value(),
-                },
+                "texture_import_defaults": tid,
                 "texture_import_overrides": overrides,
             },
         }

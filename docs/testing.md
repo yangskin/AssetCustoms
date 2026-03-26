@@ -47,11 +47,12 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
 - 若提示 `pytest 未安装`：请确认已执行依赖安装命令。
 - 若导入路径报错：测试已自动将 `Content/Python` 加到 `sys.path`，通常无需手动设置。
 
-## 测试状态（2026-03-25）
+## 测试状态（2026-03-26）
 - 环境：Windows / Python 3.11.8 / pytest 8.4.2
 - AssetCustoms Core：103 passed, 20 skipped（共 123 项用例）
 - AssetCustoms 全量（含 M7 UE 侧）：56 passed
-- SPsync（含 M7 SP 侧 + Round-Trip Sync）：185 passed
+- SPsync（含 M7-M9 SP 侧 + Round-Trip Sync + Texture Size Control + Resolution Authority）：191 passed
+- Doctest：48 passed
 - 跳过原因：20 项 `test_standardize` 依赖 Pillow（测试环境未安装时自动跳过）
 - 覆盖范围：
   - 配置解析（JSONC / Schema v1.1 / loader）
@@ -63,3 +64,5 @@ python -m pytest .\Content\Python\core\tests -k multiply -q
   - M7 SP Bridge（sp_remote: base64/HTTP mock，sp_bridge: JSON schema/序列化/数据包）
   - M7 SP Receive（JSON 解析/校验、导出配置生成、通道映射、Grayscale Filter）
   - M7 Round-Trip Sync（metadata 构建、roundtrip 导出配置、refresh list、srcMapName 映射）
+  - M8 贴图尺寸控制（max_resolution int 解析、sizeLog2 计算、SP 分辨率 Clamp）
+  - M9 分辨率权威分离（texture_size 序列化、update_texture_sizes_from_exports、Clamp [128, 4096]）

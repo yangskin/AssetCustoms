@@ -160,6 +160,7 @@ class TestCheckTextureMapping:
         assert "Metallic" in failure.details["missing_slots"] or "Roughness" in failure.details["missing_slots"]
 
     def test_orphan_detection(self, tmp_path):
+        """孤儿贴图不再导致失败，但仍被记录在 match_result.orphans 中。"""
         files = [
             str(tmp_path / "Rock_BC.png"),
             str(tmp_path / "Rock_N.png"),
@@ -167,8 +168,7 @@ class TestCheckTextureMapping:
         ]
         cfg = _make_config_for_mapping()
         match_result, failure = check_texture_mapping(files, cfg)
-        assert failure is not None
-        assert failure.check_name == "texture_mapping"
+        assert failure is None  # 孤儿不再阻断
         assert len(match_result.orphans) == 1
 
 

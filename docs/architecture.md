@@ -1,12 +1,14 @@
-# 系统架构 / 模块边界 / 数据流（V1.1）
+# 系统架构 / 模块边界 / 数据流（V1.4）
 
 本项目位于 Unreal Engine 插件的 Python 侧，主要用于资源处理与工具自动化，围绕“静默成功，响亮失败”的 UX 模型构建。
 
-> 实现状态（2026-03-25）
+> 实现状态（2026-03-26）
 > - 已完成：FR1 配置系统 ✅；FR2 智能导入核心流程 ✅；FR2.5 原生嵌入贴图管线 ✅（含内部贴图优先、自动材质绑定读取）；FR3 检查链 ✅；FR4 分诊 UI ✅（PySide6 TriageWindow + TriageDecision + 8 项单测 + 视觉验证）；FR5 标准化引擎 ✅（含 SM→MI 绑定修复、MM_Prop_PBR 母材质创建）。
 > - 已完成：M3 质量与体验 ✅（NFR1 性能预算 + NFR3 健壮性 + NFR4 无配置 UI 禁用）；M4 批处理 ✅；Config Editor GUI（Round 1-5，含多语言支持）。
 > - 已完成：M6 Send to Photoshop ✅（Content Browser 右键 → Send → Send to Photoshop，PSD 导出/监控/自动回写）。
-> - 已完成：M7 Send to Substance Painter ✅（Content Browser 右键 → Send → Send to Substance Painter，含 Config Profile Tag / 多 TextureSet / Grayscale Filter / Round-Trip Sync，SPsync 185 tests passed）。
+> - 已完成：M7 Send to Substance Painter ✅（Content Browser 右键 → Send → Send to Substance Painter，含 Config Profile Tag / 多 TextureSet / Grayscale Filter / Round-Trip Sync，SPsync 191 tests passed）。
+> - 已完成：M8 贴图尺寸控制 ✅（`max_resolution` 统一为 `int`（POT），全管线：UE 导入 → SP 项目 → SP 导出）。
+> - 已完成：M9 分辨率权威分离 ✅（`texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096]，修复 `blueprint_get_size_x/y()` 返回运行时分辨率问题）。
 > - 健壮性审计（2026-03-23）：修复 7 项问题（tick 定时器、内存泄漏、静默异常、输入校验等），详见「健壮性与稳定性审计」章节。
 > - 基础设施：PySide6-Essentials 6.10.2 + shiboken6 6.10.2 + psd-tools 1.14.2 已集成（离线 wheel + deploy.ps1）；`unreal_qt` 模块提供 Qt/UE 非阻塞共存。
 
@@ -104,6 +106,39 @@ sp_remote.py (RemotePainter)                   │   └── 配置 export pre
 > 设计文档：[ADR-0005](./decisions/ADR-0005-config-profile-metadata-tag.md)
 
 导入管线在 SM/MI 创建后自动写入 `AssetCustoms_ConfigProfile` metadata tag（值 = Profile 名称如 "Prop"）。Send to SP 时读取 tag → 加载对应 config → 用 `parameter_bindings` 动态生成通道映射，替代硬编码 `sp_channel_map.py`。同时提供 Content Browser 右键菜单查看/编辑/清除 tag，支持旧资产补标。
+
+## 模块 H：贴图尺寸控制（M8）+ 分辨率权威分离（M9）
+
+### 贴图尺寸控制（M8）
+
+在 `texture_definitions` 中通过 `max_resolution`（`Optional[int]`，POT 值）定义每张贴图的最大分辨率，全管线统一生效：
+
+| 环节 | 行为 |
+|------|------|
+| **Config** | `processing.texture_definitions[].max_resolution`：处理阶段分辨率上限 |
+| **UE 导入** | 设置 `Texture2D.max_texture_size` 属性限制运行时分辨率 |
+| **UE→SP 数据包** | `texture_definitions[]` 携带 `max_resolution`（int）传递给 SP |
+| **SP 项目创建** | `project.Settings.default_texture_resolution` = max(所有贴图 texture_size) |
+| **SP TextureSet** | `TextureSet.set_resolution()` 按 config 动态调整 |
+| **SP 导出** | `sizeLog2` = log2(clamped texture_size)，控制导出尺寸 |
+
+### 分辨率权威分离（M9）
+
+解决 `blueprint_get_size_x/y()` 返回运行时分辨率（受 `max_texture_size`/LOD 影响）的问题：
+
+```
+UE 侧：
+  1. export_textures() → 导出贴图到临时目录
+  2. update_texture_sizes_from_exports() → PIL 读取导出文件实际尺寸
+  3. texture_size = max(width, height) → 写入数据包
+
+SP 侧：
+  4. _compute_default_resolution() → Clamp [128, 4096] → 项目创建分辨率
+  5. _compute_export_size_log2() → Clamp [128, 4096] → 导出 sizeLog2
+```
+
+- **权威来源**：导出文件的实际像素尺寸（非 UE 运行时属性）
+- **Clamp 范围**：[128, 4096]（SP API 支持范围）
 
 ## 数据流（时序）
 1) UE 加载插件 -> `init_unreal.py` 注册 UI 与加载 Profile 列表。

@@ -1,6 +1,6 @@
-# 路线图 / 里程碑（V1.1）
+# 路线图 / 里程碑（V1.4）
 
-版本: V1.1（Config v1.1）  |  状态: M7 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-25
+版本: V1.4（Texture Size Control + Resolution Authority）  |  状态: M9 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-26
 
 本文件用于跟踪项目阶段性目标与关键里程碑，确保对齐产品价值与技术落地节奏。
 
@@ -242,7 +242,7 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - [x] Bug Fix：AO srcMapName "ao" → "ambientOcclusion"（probe 脚本验证）
 - [x] Bug Fix：标准导出 metallic 异常 → `sync_textures(roundtrip=False)` 跳过自动检测
 - [x] Bug Fix：Emissive BCO fallback → 材质实例仅在 `emissive_type=True` 时设置 ES 参数
-- 测试：SPsync 185 passed
+- 测试：SPsync 191 passed
   - UE 右键发送 → SP 创建项目 + Layer → 编辑 → 导出 → 自动回传 UE
   - 验证回传贴图格式、命名、材质绑定
   - 测试：🔄 完整主链路 + 异常场景矩阵（SP 未启动 / SM 无材质 / 多材质槽 / UDIM）
@@ -357,23 +357,23 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 
 **实施步骤**：
 
-- [ ] Step 15a：通道后缀解析（`sp_channel_map.py`）
+- [x] Step 15a：通道后缀解析（`sp_channel_map.py`）
   - 新增 `parse_channel_suffix(binding_value)` → `(texture_param, channel_weights | None)`
   - 通道后缀映射：`.R` → `{Red:1,Green:0,Blue:0,Alpha:0}`，`.G/.B/.A` 同理
   - 无后缀时返回 `None`（走现有普通流程）
   - 测试：🤖 后缀解析 + 权重映射 + 边界用例
-- [ ] Step 15b：SP 侧 Filter Effect 插入（`sp_receive.py`）
+- [x] Step 15b：SP 侧 Filter Effect 插入（`sp_receive.py`）
   - `_on_project_ready()` 中识别带后缀的贴图
   - 创建 Fill Layer 后，插入 Grayscale Conversion Filter Effect
   - 设置 `grayscale_type=1` + 对应 RGBA 权重
   - 同一 Packed Texture 多通道复用资源（仅导入一次）
   - 测试：🤖 mock Filter 插入 + 参数验证 → 🎨 SP 内验证
-- [ ] Step 15c：UE 侧数据包扩展（`sp_bridge.py`）
+- [x] Step 15c：UE 侧数据包扩展（`sp_bridge.py`）
   - `_collect_material_info()` 检测 `.R/.G/.B/.A` 后缀
   - 将拆分后的通道信息（`channel_suffix`）注入 `textures[]` 每个元素
   - 同一 Packed Texture 的多个引用共享同一导出文件路径
   - 测试：🤖 数据包结构验证 → 👁️ UE 侧验证
-- [ ] Step 15d：集成测试
+- [x] Step 15d：集成测试
   - MRO Packed Texture → SP 中自动创建 3 个 Fill Layer（M/R/AO 各一个）
   - 每个 Fill Layer 包含 Grayscale Conversion Filter + 正确的 RGBA 权重
   - 向后兼容：无后缀的 bindings 行为不变
@@ -386,6 +386,80 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 | SP 启动参数 | 必须以 `--enable-remote-scripting` 启动 Substance Painter |
 | SPsync 已安装 | SP 插件目录中需存在 SPsync 插件并启用 |
 | vendor_libs 已部署 | AssetCustoms deploy.ps1 已执行 |
+
+## M8 — 贴图尺寸控制（Texture Size Control）✅（已完成 2026-03-26）
+
+> 可行性调研文档：[SPsync/doc/TEXTURE_SIZE_CONTROL.md]
+> 设计原则：一切以配置文件中的 `max_resolution` 为准，全管线统一。
+
+**目标**：在 `texture_definitions` 中为每张贴图定义最大分辨率（单个 int，POT），流经 UE 导入 → SP 项目创建 → SP 导出 全管线。
+
+**配置格式**（最终实现）：
+```jsonc
+{
+  "name": "Diffuse",
+  "suffix": "D",
+  // ... 现有字段 ...
+  "max_resolution": 2048   // 单个 int（POT：256/512/1024/2048/4096），省略时不限制
+}
+```
+- **类型**：`Optional[int]`（最初设计为 `{width, height}` 字典，M8 实施中统一简化为 `int`）
+- 省略 `max_resolution` 时不限制分辨率（向后兼容）
+- 值必须为 2 的幂（POT）
+
+### 实施步骤
+
+- [x] Phase 1：Config 格式扩展（schema.py + loader.py + Prop.jsonc + Character.jsonc）
+- [x] Phase 2：UE 导入限制（import_textures_ue.py — `max_texture_size`）
+- [x] Phase 3：SP 接收端设置分辨率（sp_receive.py — `default_texture_resolution` + `set_resolution`）
+- [x] Phase 4：SP 导出尺寸控制（sp_channel_map.py — `sizeLog2`）
+- [x] Phase 5：Config Editor UI（config_editor.py — max_resolution 控件）
+- [x] Phase 6：测试与 E2E 验证
+
+### 影响的文件
+
+| 文件 | 变更说明 |
+|------|----------|
+| `core/config/schema.py` | `TextureProcessingDef.max_resolution: Optional[int]`；`TextureImportDefaults.max_resolution: Optional[int]` |
+| `core/config/loader.py` | 解析 `max_resolution`（int） |
+| `Prop.jsonc` / `Character.jsonc` | 每个 texture_definition 添加 `max_resolution`（int POT） |
+| `sp_bridge.py` | 序列化 `max_resolution` + `texture_size` 到 SP 数据包 |
+| `import_textures_ue.py` | 导入后设置 `max_texture_size` |
+| `sp_receive.py` | 项目创建 `default_texture_resolution` + TextureSet `set_resolution`，Clamp [128, 4096] |
+| `sp_channel_map.py` | 导出配置注入 `sizeLog2`（`_compute_export_size_log2()`） |
+| `config_editor.py` | max_resolution 控件（int 输入） |
+
+### 测试统计
+- SPsync：191 passed
+- AssetCustoms Core：103 passed, 20 skipped
+- AssetCustoms 全量：56 passed（含 M7 UE 侧）
+- Doctest：48 passed
+
+## M9 — 分辨率权威分离（Resolution Authority Separation）✅（已完成 2026-03-26）
+
+**目标**：解决 `blueprint_get_size_x/y()` 返回运行时分辨率（受 `max_texture_size`/LOD 影响）而非源文件分辨率的问题，确保 SP 端获得贴图的真实像素尺寸。
+
+**核心改动**：
+1. **`texture_size` 字段**：在 UE→SP 数据包中新增 `texture_size` 字段，值 = `max(tex_size_x, tex_size_y)`
+2. **`update_texture_sizes_from_exports()`**：导出贴图到磁盘后，使用 PIL 读取实际导出文件的像素尺寸，覆盖 `texture_size` 值
+3. **SP 端 Clamp [128, 4096]**：
+   - `_compute_default_resolution()`：项目创建时的 `default_texture_resolution`，Clamp 到 [128, 4096]
+   - `_compute_export_size_log2()`：导出时的 `sizeLog2`，Clamp 到 [128, 4096]（log2 ∈ [7, 12]）
+4. **SP `project.create()` ValueError 修复**：textureSize=32 等过小值导致 SP 报错，Clamp 后消除
+
+### 影响的文件
+
+| 文件 | 变更说明 |
+|------|----------|
+| `sp_bridge.py` | 新增 `update_texture_sizes_from_exports()` 函数 + `texture_size` 序列化 |
+| `sp_receive.py` | `_compute_default_resolution()` Clamp 逻辑 |
+| `sp_channel_map.py` | `_compute_export_size_log2()` Clamp 逻辑 |
+
+### 设计要点
+
+- **权威来源**：贴图尺寸的权威来源从 `blueprint_get_size_x/y()`（可能被引擎限制）改为导出文件的实际像素尺寸
+- **向后兼容**：无 `texture_size` 字段时 SP 端使用默认值 1024
+- **Clamp 范围**：SP API 对 `default_texture_resolution` 和 `sizeLog2` 有范围要求，[128, 4096] 覆盖 SP 支持的全部 POT 值
 
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。

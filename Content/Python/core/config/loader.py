@@ -22,6 +22,17 @@ from .jsonc import load_jsonc_file, loads_jsonc
 # 低层解析辅助函数
 # ---------------------------------------------------------------------------
 
+def _parse_max_resolution(raw: Any) -> Optional[int]:
+    """兼容解析 max_resolution：新格式 int / 旧格式 {"width": N, "height": N}。"""
+    if raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw if raw > 0 else None
+    if isinstance(raw, dict):
+        return max(raw.get("width", 0), raw.get("height", 0)) or None
+    return None
+
+
 def _parse_channel_def(data: Dict[str, Any]) -> ChannelDef:
     return ChannelDef(
         source=data.get("from", ""),
@@ -84,6 +95,7 @@ def _parse_texture_processing_def(data: Dict[str, Any]) -> TextureProcessingDef:
         mips=bool(data.get("mips", True)),
         resize=data.get("resize"),
         alpha_premultiplied=bool(data.get("alpha_premultiplied", False)),
+        max_resolution=_parse_max_resolution(data.get("max_resolution")),
     )
 
 
@@ -158,6 +170,7 @@ def _parse_texture_import_defaults(data: Dict[str, Any]) -> TextureImportDefault
         address_x=data.get("address_x", "Wrap"),
         address_y=data.get("address_y", "Wrap"),
         mip_gen=data.get("mip_gen", "FromTextureGroup"),
+        max_resolution=_parse_max_resolution(data.get("max_resolution")),
     )
 
 

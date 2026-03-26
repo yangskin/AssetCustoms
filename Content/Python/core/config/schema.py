@@ -72,6 +72,7 @@ class TextureProcessingDef:
     mips: bool = True
     resize: Optional[Dict[str, int]] = None
     alpha_premultiplied: bool = False
+    max_resolution: Optional[int] = None  # 正方形最大分辨率, POT (e.g. 2048)
 
 
 @dataclass
@@ -172,6 +173,7 @@ class TextureImportDefaults:
     address_x: str = "Wrap"
     address_y: str = "Wrap"
     mip_gen: str = "FromTextureGroup"
+    max_resolution: Optional[int] = None  # 交付最大尺寸, POT (e.g. 1024)
 
 
 @dataclass

@@ -69,12 +69,18 @@ def pack_channels(
     if Image is None:
         raise ImportError("Pillow 未安装，无法执行通道编排")
 
-    # 推断输出尺寸
+    # 推断输出尺寸：取所有可用源中最大宽高，避免因小尺寸占位贴图拉低输出
     if size is None:
+        max_w, max_h = 0, 0
         for src_img in sources.values():
             if src_img is not None:
-                size = src_img.size
-                break
+                sw, sh = src_img.size
+                if sw > max_w:
+                    max_w = sw
+                if sh > max_h:
+                    max_h = sh
+        if max_w > 0 and max_h > 0:
+            size = (max_w, max_h)
     if size is None:
         size = (1, 1)
 

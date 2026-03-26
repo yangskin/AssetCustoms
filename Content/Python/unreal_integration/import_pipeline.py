@@ -313,6 +313,11 @@ class UnrealAssetOps:
         if "virtual_texture" in settings:
             tex.set_editor_property("virtual_texture_streaming", bool(settings["virtual_texture"]))
 
+        # 交付 max_resolution → max_texture_size
+        mr = settings.get("max_resolution")
+        if mr and isinstance(mr, int) and mr > 0:
+            tex.set_editor_property("max_texture_size", mr)
+
         unreal.EditorAssetLibrary.save_asset(texture_path)
         return True
 
@@ -527,6 +532,7 @@ def _resolve_import_settings(config: PluginConfig, suffix: str) -> Dict:
         "address_x": defaults.address_x,
         "address_y": defaults.address_y,
         "mip_gen": defaults.mip_gen,
+        "max_resolution": defaults.max_resolution,
     }
     overrides = config.output.texture_import_overrides.get(suffix, {})
     settings.update(overrides)

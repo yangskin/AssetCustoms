@@ -1,8 +1,10 @@
 # AssetCustoms — UE5 资产自动化插件
 
-> 版本: V1.2（Send to Photoshop） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
+> 版本: V1.4（Texture Size Control + Resolution Authority） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
 
-AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。
+AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。同时支持与 Substance Painter（通过配套插件 [SPsync](#跨项目协作spsync)）的双向同步，包括一键发送、配置驱动通道映射、贴图尺寸控制和回传刷新。
+
+> **注意**：AssetCustoms（UE 侧）与 SPsync（SP 侧）是**独立发布**的两个插件，分别安装在 UE 项目和 SP 插件目录中。
 
 ---
 
@@ -159,8 +161,29 @@ print(QtCore.qVersion())
 | 健壮性审计 | 7 项问题修复（内存泄漏、静默异常等） | ✅ |
 | **M5** Config v2.0 | 三段式管线模型（Input→Processing→Output） | ✅ |
 | **M6** Send to Photoshop | Content Browser 右键发送贴图到 PS，自动监控回写 | ✅ |
+| **M7** Send to Substance Painter | 右键发送 SM 到 SP，Config Profile 驱动通道映射，Round-Trip 回传 | ✅ |
+| **M8** 贴图尺寸控制 | `max_resolution`（int POT）全管线统一：UE 导入 → SP 项目 → SP 导出 | ✅ |
+| **M9** 分辨率权威分离 | `texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096] | ✅ |
 
 详见 [`docs/roadmap.md`](docs/roadmap.md)。
+
+### 跨项目协作（SPsync）
+
+AssetCustoms 的 **Send to Substance Painter** 功能与 SP 侧的 [SPsync](https://github.com/xxx/SPsync) 插件协作完成。两者**独立发布**：
+
+| 插件 | 安装位置 | 职责 |
+|------|----------|------|
+| **AssetCustoms**（本插件） | UE 项目 `Plugins/AssetCustoms/` | 材质收集、FBX/贴图导出、数据包发送、贴图回传刷新 |
+| **SPsync** | SP 插件目录 `...\Substance 3D Painter\python\plugins\SPsync\` | 项目创建、Layer 构建、通道映射、导出、双向同步 |
+
+**通信方式**：
+- UE→SP：HTTP POST base64(python_script) → SP Remote Scripting API（localhost:60041）
+- SP→UE：Remote Execution TCP 协议（localhost:6776）
+
+**前置条件**：
+- SP 以 `--enable-remote-scripting` 参数启动
+- SPsync 插件已安装并启用
+- AssetCustoms `deploy.bat` 已执行
 
 ---
 
@@ -353,6 +376,24 @@ deploy.bat -Clean
 5. 关闭 Photoshop 后临时文件自动清理
 
 > 需要系统已安装 Adobe Photoshop（自动搜索 `C:\Program Files\Adobe\` 路径）。
+
+### Q: 如何使用 Send to Substance Painter？
+
+1. 在 Content Browser 中选中一个 **StaticMesh** 资产
+2. 右键 → **Send** → **Send to Substance Painter**
+3. 插件自动收集材质信息、导出 FBX 和贴图，发送到 SP 创建项目
+4. SP 中自动创建 Fill Layer 并按 Config Profile 的 `parameter_bindings` 映射通道
+5. 在 SP 中编辑贴图后点击 **SYNC**，自动按 UE 原始格式回传刷新
+
+> **前置条件**：SP 以 `--enable-remote-scripting` 启动，SPsync 插件已安装。
+> **Config Profile**：导入时自动打标签到 SM/MI 元数据，Send to SP 时读取并驱动映射。支持 Content Browser 右键 View/Set/Clear Profile。
+
+### Q: max_resolution 如何控制贴图尺寸？
+
+`max_resolution` 是一个 **整数**（POT 值，如 512、1024、2048、4096），定义在 `processing.texture_definitions[].max_resolution` 和 `output.texture_import_defaults.max_resolution` 中。全管线统一生效：
+- **UE 导入**：设置 `max_texture_size` 属性限制运行时分辨率
+- **SP 项目创建**：作为 `default_texture_resolution` 初始化 TextureSet 分辨率
+- **SP 导出**：转换为 `sizeLog2` 控制导出尺寸
 
 ---
 

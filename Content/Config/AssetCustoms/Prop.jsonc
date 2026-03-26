@@ -151,12 +151,13 @@
         "suffix": "D",
         "category": "PBR",
         "srgb": true,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
         "alpha_premultiplied": false,
         "allow_missing": false,
         "flip_green": false,
+        "max_resolution": 2048,
         "channels": {
           "R": {
             "from": "BaseColor",
@@ -182,13 +183,14 @@
         "suffix": "N",
         "category": "PBR",
         "srgb": false,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": true,
         "normal_space": "OpenGL",
+        "max_resolution": 2048,
         "channels": {
           "R": {
             "from": "Normal",
@@ -217,12 +219,13 @@
         "suffix": "MRO",
         "category": "PBR",
         "srgb": false,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
+        "max_resolution": 1024,
         "channels": {
           "R": {
             "from": "Metallic",
@@ -251,12 +254,13 @@
         "suffix": "H",
         "category": "PBR",
         "srgb": false,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 16,
         "mips": true,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
+        "max_resolution": 1024,
         "channels": {
           "R": {
             "from": "Height",
@@ -285,12 +289,13 @@
         "suffix": "E",
         "category": "PBR",
         "srgb": true,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
+        "max_resolution": 1024,
         "channels": {
           "R": {
             "from": "Emissive",
@@ -345,18 +350,25 @@
       "virtual_texture": false,
       "address_x": "Wrap",
       "address_y": "Wrap",
-      "mip_gen": "FromTextureGroup"
+      "mip_gen": "FromTextureGroup",
+      "max_resolution": 1024
     },
     "texture_import_overrides": {
+      "D": {
+        "max_resolution": 1024
+      },
       "N": {
         "compression": "TC_Normalmap",
-        "lod_group": "TEXTUREGROUP_WorldNormalMap"
+        "lod_group": "TEXTUREGROUP_WorldNormalMap",
+        "max_resolution": 512
       },
       "MRO": {
-        "compression": "TC_Masks"
+        "compression": "TC_Masks",
+        "max_resolution": 512
       },
       "H": {
-        "compression": "TC_Grayscale"
+        "compression": "TC_Grayscale",
+        "max_resolution": 512
       }
     }
   }

@@ -36,6 +36,7 @@ def _resolve_import_settings(config: PluginConfig, suffix: str) -> Dict:
         "address_x": defaults.address_x,
         "address_y": defaults.address_y,
         "mip_gen": defaults.mip_gen,
+        "max_resolution": defaults.max_resolution,
     }
     overrides = config.output.texture_import_overrides.get(suffix, {})
     settings.update(overrides)
@@ -104,6 +105,18 @@ def _resize_image(img: Any, resize_spec: Optional[Dict[str, int]]) -> Any:
     if (w, h) == img.size:
         return img
     return img.resize((w, h), resample=getattr(Image, "BILINEAR", 2))
+
+
+def _apply_max_resolution(img: Any, max_res: Optional[int]) -> Any:
+    """max_resolution 上限（仅缩小，不放大）。"""
+    if max_res is None or max_res <= 0:
+        return img
+    w, h = img.size
+    new_w = min(w, max_res)
+    new_h = min(h, max_res)
+    if (new_w, new_h) == (w, h):
+        return img
+    return img.resize((new_w, new_h), resample=getattr(Image, "BILINEAR", 2))
 
 
 def _save_image(
@@ -189,6 +202,9 @@ def process_textures(
 
             # 可选缩放
             img = _resize_image(img, proc_def.resize)
+
+            # 处理阶段 max_resolution 上限（仅缩小，不放大）
+            img = _apply_max_resolution(img, proc_def.max_resolution)
 
             # 生成文件名
             tex_name = config.output.naming.texture

@@ -155,9 +155,10 @@
         "suffix": "D",
         "category": "Character",
         "srgb": true,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
+        "max_resolution": 2048,
         "alpha_premultiplied": false,
         "allow_missing": false,
         "flip_green": false,
@@ -188,9 +189,10 @@
         "suffix": "N",
         "category": "Character",
         "srgb": false,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
+        "max_resolution": 4096,
         "alpha_premultiplied": false,
         "allow_missing": false,
         "flip_green": true,
@@ -220,9 +222,10 @@
         "suffix": "MRO",
         "category": "Character",
         "srgb": false,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
+        "max_resolution": 2048,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
@@ -254,9 +257,10 @@
         "suffix": "SSS",
         "category": "Character",
         "srgb": true,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
+        "max_resolution": 1024,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
@@ -288,9 +292,10 @@
         "suffix": "E",
         "category": "Character",
         "srgb": true,
-        "format": "PNG",
+        "format": "TGA",
         "bit_depth": 8,
         "mips": true,
+        "max_resolution": 1024,
         "alpha_premultiplied": false,
         "allow_missing": true,
         "flip_green": false,
@@ -345,6 +350,7 @@
     "texture_import_defaults": {
       "compression": "TC_Default",
       "lod_group": "TEXTUREGROUP_Character",
+      "max_resolution": 2048,
       "virtual_texture": false,
       "address_x": "Wrap",
       "address_y": "Wrap",
@@ -353,10 +359,17 @@
     "texture_import_overrides": {
       "N": {
         "compression": "TC_Normalmap",
-        "lod_group": "TEXTUREGROUP_CharacterNormalMap"
+        "lod_group": "TEXTUREGROUP_CharacterNormalMap",
+        "max_resolution": 4096
       },
       "MRO": {
         "compression": "TC_Masks"
+      },
+      "SSS": {
+        "max_resolution": 1024
+      },
+      "E": {
+        "max_resolution": 1024
       }
     }
   }

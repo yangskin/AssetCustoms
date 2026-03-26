@@ -157,12 +157,8 @@ def check_texture_mapping(
                 "ambiguous": match_result.ambiguous_slots,
             },
         )
-    elif match_result.orphans:
-        failure = CheckFailure(
-            check_name="texture_mapping",
-            reason=f"存在 {len(match_result.orphans)} 个孤儿贴图未被规则匹配",
-            details={"orphans": match_result.orphans},
-        )
+    # 孤儿贴图仅记录日志，不阻断导入
+    # （外部目录中的无关文件不应导致整个管线失败）
 
     return match_result, failure
 
