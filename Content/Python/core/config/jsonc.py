@@ -16,10 +16,9 @@ from typing import Any
 def _strip_jsonc(src: str) -> str:
     # Remove /* block */ comments (non-greedy, dotall)
     src = re.sub(r"/\*.*?\*/", "", src, flags=re.S)
-    # Remove // line comments (ignore within strings – naive approach)
-    # A simple heuristic: remove // to end of line when not inside quotes is hard;
-    # for most configs, removing //.* works well enough when comments are standalone.
-    src = re.sub(r"(^|[^:\\])//.*$", r"\1", src, flags=re.M)
+    # Remove // line comments — avoid stripping :// in URLs
+    # Match // that is NOT preceded by : (negative lookbehind)
+    src = re.sub(r"(?<!:)//.*$", "", src, flags=re.M)
     # Remove trailing commas before } or ]
     src = re.sub(r",\s*([}\]])", r"\1", src)
     return src

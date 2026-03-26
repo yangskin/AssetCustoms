@@ -139,9 +139,10 @@ def build_sp_script(material_info_json: str, mesh_export_path: str) -> str:
     Returns:
         完整的 Python 脚本字符串。
     """
-    # 转义 JSON 中的反斜杠和引号供嵌入 Python 字符串
-    escaped_json = material_info_json.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n")
-    escaped_mesh = mesh_export_path.replace("\\", "\\\\").replace("'", "\\'")
+    # 使用 json.dumps 安全嵌入字符串（自动处理所有转义字符）
+    import json as _json
+    safe_json = _json.dumps(material_info_json)
+    safe_mesh = _json.dumps(mesh_export_path)
 
     # 注意：不使用 threading — SP Python API 非线程安全，
     # 必须在主线程执行。UE 侧 fire-and-forget 超时后会优雅处理。
@@ -149,8 +150,8 @@ def build_sp_script(material_info_json: str, mesh_export_path: str) -> str:
         "try:\n"
         "    import substance_painter_plugins\n"
         "    receive_fn = substance_painter_plugins.plugins['SPsync'].receive_from_ue\n"
-        f"    json_data = '{escaped_json}'\n"
-        f"    mesh_path = '{escaped_mesh}'\n"
+        f"    json_data = {safe_json}\n"
+        f"    mesh_path = {safe_mesh}\n"
         "    receive_fn(json_data, mesh_path)\n"
         "except Exception as e:\n"
         "    import traceback\n"

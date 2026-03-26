@@ -81,7 +81,10 @@ def _load_source_images(
     sources: Dict[str, Any] = {}
     for slot, path in mapping.items():
         try:
-            sources[slot] = Image.open(path).convert("RGBA")
+            img = Image.open(path)
+            sources[slot] = img.convert("RGBA")
+            if img.mode != "RGBA":
+                img.close()
         except Exception as e:
             logger.warning("Failed to load source image for slot '%s': %s — %s", slot, path, e)
     return sources

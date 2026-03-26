@@ -134,19 +134,20 @@ class RemotePainter:
             ExecuteScriptError: SP 端脚本执行出错。
         """
         body = build_request_body(script)
+        conn = http.client.HTTPConnection(
+            self._host, self._port, timeout=EXEC_TIMEOUT
+        )
         try:
-            conn = http.client.HTTPConnection(
-                self._host, self._port, timeout=EXEC_TIMEOUT
-            )
             conn.request("POST", PAINTER_ROUTE, body, HEADERS)
             response = conn.getresponse()
             data = response.read()
-            conn.close()
         except (OSError, http.client.HTTPException) as exc:
             raise ConnectionError(
                 f"无法连接到 Substance Painter ({self._host}:{self._port})。"
                 f"请确认 SP 已启动并使用 --enable-remote-scripting 参数。"
             ) from exc
+        finally:
+            conn.close()
 
         return parse_response(data)
 
@@ -160,18 +161,19 @@ class RemotePainter:
         不是 stdout。因此使用字符串字面量而非 print()。
         """
         body = build_request_body("'__sp_ready__'")
+        conn = http.client.HTTPConnection(
+            self._host, self._port, timeout=CONNECTION_TIMEOUT
+        )
         try:
-            conn = http.client.HTTPConnection(
-                self._host, self._port, timeout=CONNECTION_TIMEOUT
-            )
             conn.request("POST", PAINTER_ROUTE, body, HEADERS)
             response = conn.getresponse()
             data = response.read()
-            conn.close()
             result = parse_response(data)
             return "__sp_ready__" in result
         except (OSError, http.client.HTTPException, PainterError):
             return False
+        finally:
+            conn.close()
 
     def execute_fire_and_forget(self, script: str) -> str:
         """发送脚本到 SP 执行，使用短超时。
@@ -190,15 +192,16 @@ class RemotePainter:
             超时不意味着失败 — SP 仍在执行脚本。
         """
         body = build_request_body(script)
+        conn = http.client.HTTPConnection(
+            self._host, self._port, timeout=FIRE_AND_FORGET_TIMEOUT
+        )
         try:
-            conn = http.client.HTTPConnection(
-                self._host, self._port, timeout=FIRE_AND_FORGET_TIMEOUT
-            )
             conn.request("POST", PAINTER_ROUTE, body, HEADERS)
             response = conn.getresponse()
             data = response.read()
-            conn.close()
             return parse_response(data)
         except (OSError, http.client.HTTPException):
             # 超时或断开 — SP 侧脚本仍在运行，不视为错误
             return ""
+        finally:
+            conn.close()

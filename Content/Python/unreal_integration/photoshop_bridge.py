@@ -85,7 +85,7 @@ class TextureMonitor(TickTimer):
         self._check_for_changes()
 
     def _should_cleanup(self) -> bool:
-        return self.process.poll() == 0
+        return self.process.poll() is not None
 
     def _cleanup(self) -> None:
         self.callback.cleanup_all_temp_file()
