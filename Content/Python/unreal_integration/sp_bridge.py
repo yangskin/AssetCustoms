@@ -355,18 +355,35 @@ class SPBridge:
             )
             return
 
-        # 确保 SP 已启动并连接
-        unreal.log("[AssetCustoms] [1/6] 检查 SP 连接...")
-        if not self._ensure_sp_running():
-            return
-
-        # 收集数据
-        unreal.log("[AssetCustoms] [2/6] 收集材质信息...")
+        # 收集数据（在连接 SP 之前先检查配置，避免无配置时白等连接）
+        unreal.log("[AssetCustoms] [1/6] 收集材质信息...")
         material_info_json = self._collect_material_info(mesh)
         if material_info_json is None:
             return
 
         material_info = parse_material_info_json(material_info_json)
+
+        # ── 配置检查：至少需要一个有效的 config_profile ──
+        if not self._has_valid_config(material_info):
+            unreal.EditorDialog.show_message(
+                title="Send to Substance Painter",
+                message=(
+                    "无法导出：选中资产没有关联的 AssetCustoms 配置。\n\n"
+                    "缺少材质/贴图相关定义信息，SP 端无法正确接收。\n"
+                    "请先通过右键菜单 → Config Profile → Set 为资产\n"
+                    "（StaticMesh 或 MaterialInstance）指定配置文件。\n\n"
+                    "Export blocked: no AssetCustoms config profile found.\n"
+                    "Please assign a config profile to the mesh or its materials\n"
+                    "via right-click → Config Profile → Set."
+                ),
+                message_type=unreal.AppMsgType.OK,
+            )
+            return
+
+        # 确保 SP 已启动并连接
+        unreal.log("[AssetCustoms] [2/6] 检查 SP 连接...")
+        if not self._ensure_sp_running():
+            return
 
         # 导出 FBX
         unreal.log("[AssetCustoms] [3/6] 导出 FBX...")
@@ -432,6 +449,25 @@ class SPBridge:
                     return mesh
 
         return None
+
+    @staticmethod
+    def _has_valid_config(material_info: dict) -> bool:
+        """检查材质信息中是否至少有一个有效的配置。
+
+        如果顶层或任意材质条目包含 config_profile，视为有配置。
+
+        Args:
+            material_info: parse_material_info_json() 返回的字典。
+
+        Returns:
+            True 表示有至少一个有效配置，False 表示完全无配置。
+        """
+        if material_info.get("config_profile"):
+            return True
+        for mat in material_info.get("materials", []):
+            if mat.get("config_profile"):
+                return True
+        return False
 
     def _collect_material_info(self, mesh) -> str | None:
         """遍历选中 Mesh 的材质槽收集信息。
