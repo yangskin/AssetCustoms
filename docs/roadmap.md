@@ -460,7 +460,37 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 - **权威来源**：贴图尺寸的权威来源从 `blueprint_get_size_x/y()`（可能被引擎限制）改为导出文件的实际像素尺寸
 - **向后兼容**：无 `texture_size` 字段时 SP 端使用默认值 1024
 - **Clamp 范围**：SP API 对 `default_texture_resolution` 和 `sizeLog2` 有范围要求，[128, 4096] 覆盖 SP 支持的全部 POT 值
+## M10 — Level Editor Actor → Send to SP ✅（已完成 2026-03-26）
 
+> 设计文档：[ADR-0006](./decisions/ADR-0006-level-editor-send-to-sp.md)（状态：已确认）
+
+**目标**：在 Level Editor 中选中含 StaticMeshComponent 的 Actor，直接提取绑定的 StaticMesh 资产发送到 SP。无需先到 Content Browser 找到资产再右键发送。
+
+**API 链路**（UE 5.7 Python API 确认可用）：
+- `EditorActorSubsystem.get_selected_level_actors()` → `Array[Actor]`
+- `Actor.get_components_by_class(StaticMeshComponent)` → `Array[ActorComponent]`
+- `StaticMeshComponent.static_mesh` (只读) → `StaticMesh`
+
+**实现策略**：修改 `SPBridge._send_selected_impl()` 增加 Level Editor 回退逻辑：
+1. 优先 Content Browser 选中的 StaticMesh/SkeletalMesh
+2. Content Browser 无选中时，从 Level Editor 选中的 Actor 提取 StaticMesh
+3. 后续流程（收集材质、导出 FBX/贴图、发送到 SP）完全复用
+
+### 实施步骤
+
+- [x] Step 1：可行性调查 + ADR 文档（ADR-0006）
+- [x] Step 2：`sp_bridge.py` — `_send_selected_impl()` 增加 Level Editor 回退逻辑 + `_extract_mesh_from_selected_actors()`
+- [x] Step 3：`ui.py` — `_register_actor_context_menu()` 在 `LevelEditor.ActorContextMenu` → `ActorOptions` 注册 Send 子菜单
+- [x] Step 4：🤖 pytest 单元测试 — 9 passed（mock EditorActorSubsystem）+ 14 回归测试全部通过
+- [x] Step 5：👁️ UE 人工验证 — 测试通过
+- [x] Step 6：兼容性回归 — Content Browser 选中仍优先走原路径
+
+### 影响的文件
+
+| 文件 | 变更说明 |
+|------|----------|
+| `sp_bridge.py` | `_send_selected_impl()` 增加 Actor→StaticMesh 提取逻辑 + `_extract_mesh_from_selected_actors()` |
+| `ui.py` | 新增 `_register_actor_context_menu()` 在 `LevelEditor.ActorContextMenu` 注册 Send 子菜单 |
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。
 - 文件名/贴图规则存在多样性：必须优先“智能预填充”，回退到规则匹配与分诊 UI。

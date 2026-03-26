@@ -164,6 +164,7 @@ print(QtCore.qVersion())
 | **M7** Send to Substance Painter | 右键发送 SM 到 SP，Config Profile 驱动通道映射，Round-Trip 回传 | ✅ |
 | **M8** 贴图尺寸控制 | `max_resolution`（int POT）全管线统一：UE 导入 → SP 项目 → SP 导出 | ✅ |
 | **M9** 分辨率权威分离 | `texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096] | ✅ |
+| **M10** Level Editor 发送 | 视口选中 Actor 右键发送到 SP，自动提取 StaticMesh，复用现有管线 | ✅ |
 
 详见 [`docs/roadmap.md`](docs/roadmap.md)。
 
@@ -379,11 +380,19 @@ deploy.bat -Clean
 
 ### Q: 如何使用 Send to Substance Painter？
 
+**方式一：Content Browser（选中资产）**
 1. 在 Content Browser 中选中一个 **StaticMesh** 资产
 2. 右键 → **Send** → **Send to Substance Painter**
+
+**方式二：Level Editor 视口（选中 Actor）**
+1. 在关卡视口中选中一个含 **StaticMeshComponent** 的 Actor
+2. 右键 → **Send** → **Send to Substance Painter**
+3. 插件自动从 Actor 提取绑定的 StaticMesh，后续流程与 Content Browser 一致
+
+**通用流程**：
 3. 插件自动收集材质信息、导出 FBX 和贴图，发送到 SP 创建项目
 4. SP 中自动创建 Fill Layer 并按 Config Profile 的 `parameter_bindings` 映射通道
-5. 在 SP 中编辑贴图后点击 **SYNC**，自动按 UE 原始格式回传刷新
+5. 在 SP 中编辑贴图后点击 **SYNC**，自动按 UE 原来的路径和格式回传刷新
 
 > **前置条件**：SP 以 `--enable-remote-scripting` 启动，SPsync 插件已安装。
 > **Config Profile**：导入时自动打标签到 SM/MI 元数据，Send to SP 时读取并驱动映射。支持 Content Browser 右键 View/Set/Clear Profile。

@@ -332,6 +332,7 @@ class SPBridge:
     def _send_selected_impl(self, unreal, SPConnectionError) -> None:
         """send_selected 的实际实现（外层已有 try/except 保护）。"""
         # ── 前置校验：选中资产必须是 StaticMesh 或 SkeletalMesh ──
+        # 优先从 Content Browser 获取
         assets = unreal.EditorUtilityLibrary.get_selected_assets()
         mesh = None
         for asset in assets:
@@ -339,10 +340,17 @@ class SPBridge:
                 mesh = asset
                 break
 
+        # 回退：从 Level Editor 选中的 Actor 提取 StaticMesh
+        if mesh is None:
+            mesh = self._extract_mesh_from_selected_actors(unreal)
+
         if mesh is None:
             unreal.EditorDialog.show_message(
                 title="Send to Substance Painter",
-                message="请先选择一个 StaticMesh 或 SkeletalMesh 资产。",
+                message=(
+                    "请先选择一个 StaticMesh / SkeletalMesh 资产，\n"
+                    "或在关卡中选中包含 StaticMeshComponent 的 Actor。"
+                ),
                 message_type=unreal.AppMsgType.OK,
             )
             return
@@ -390,6 +398,40 @@ class SPBridge:
             unreal.log_error(f"[AssetCustoms] SP 连接失败: {exc}")
         except Exception as exc:
             unreal.log_error(f"[AssetCustoms] SP 脚本执行失败: {exc}")
+
+    @staticmethod
+    def _extract_mesh_from_selected_actors(unreal):
+        """从 Level Editor 选中的 Actor 中提取 StaticMesh 资产。
+
+        遍历选中的 Actor，查找第一个包含 StaticMeshComponent 且绑定了
+        有效 StaticMesh 资产的组件，返回该 StaticMesh。
+
+        Returns:
+            StaticMesh 或 None。
+        """
+        try:
+            subsystem = unreal.get_editor_subsystem(unreal.EditorActorSubsystem)
+        except Exception:
+            return None
+        if subsystem is None:
+            return None
+
+        actors = subsystem.get_selected_level_actors()
+        if not actors:
+            return None
+
+        for actor in actors:
+            comps = actor.get_components_by_class(unreal.StaticMeshComponent)
+            for comp in comps:
+                mesh = comp.static_mesh
+                if mesh is not None:
+                    unreal.log(
+                        f"[AssetCustoms] Level Editor: 从 Actor '{actor.get_actor_label()}' "
+                        f"提取 StaticMesh '{mesh.get_name()}'"
+                    )
+                    return mesh
+
+        return None
 
     def _collect_material_info(self, mesh) -> str | None:
         """遍历选中 Mesh 的材质槽收集信息。

@@ -378,11 +378,46 @@ class AssetCustomsUI:
             except Exception:
                 pass
 
+    def _register_actor_context_menu(self) -> None:
+        """在 Level Editor 视口的 Actor 右键菜单注册 'Send to SP' 条目。"""
+        actor_menu_path = "LevelEditor.ActorContextMenu"
+        menu = self.menus.find_menu(actor_menu_path)
+        if not menu:
+            menu = self.menus.extend_menu(actor_menu_path)
+
+        section = self.cfg.get("section") or "AssetCustoms"
+        send_menu_name = f"{section}.ActorSend"
+
+        try:
+            send_menu = menu.add_sub_menu(
+                menu.get_name(), "ActorOptions", send_menu_name, "Send", ""
+            )
+        except Exception:
+            send_menu = self.menus.extend_menu(send_menu_name)
+
+        if not send_menu:
+            return
+
+        sp_cmd = self._build_python_command("on_send_to_substance_painter")
+        sp_entry = self.make_py_entry(
+            entry_name=f"{section}.ActorSendToSubstancePainter",
+            label="Send to Substance Painter",
+            tooltip="从选中 Actor 提取 StaticMesh 并发送到 Substance Painter",
+            python=sp_cmd,
+            is_toolbar=False,
+            icon={"style_set": "EditorStyle", "style_name": "ContentBrowser.AssetActions"},
+        )
+        try:
+            send_menu.add_menu_entry("Send", sp_entry)
+        except Exception:
+            pass
+
     def register_all(self) -> None:
         """一次性注册并刷新 UI。"""
         if self.cfg.get("dropdown_from_configs", False):
             self._register_toolbar_dropdown_from_configs()
         self._register_asset_context_menu()
+        self._register_actor_context_menu()
         for _key, e in (self.cfg.get("entries") or {}).items():
             self.register_entry(e)
         self.menus.refresh_all_widgets()
