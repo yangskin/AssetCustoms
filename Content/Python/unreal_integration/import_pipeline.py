@@ -136,6 +136,9 @@ class UnrealAssetOps:
 
         mesh_data.set_editor_property("import_mesh_lods", mi.import_mesh_lods)
 
+    # CVar 名称常量：控制 Interchange 框架是否处理 FBX 格式
+    _CVAR_INTERCHANGE_FBX = "Interchange.FeatureFlags.Import.FBX"
+
     def import_fbx(
         self,
         fbx_path: str,
@@ -156,6 +159,12 @@ class UnrealAssetOps:
         task.set_editor_property("automated", True)
         task.set_editor_property("save", True)
         task.set_editor_property("replace_existing", True)
+
+        # 不指定 factory —— 让 Interchange 框架处理 FBX 导入。
+        # 某些第三方插件（如 RLPlugin）会在 StartupModule 中将
+        # Interchange.FeatureFlags.Import.FBX 设为 false，导致 FBX 回退到
+        # Legacy FbxFactory 路径，引发贴图提取异常。
+        # 这里在导入前临时恢复该 CVar，导入后还原，确保走 Interchange 管线。
 
         # FBX 设置
         fbx_options = unreal.FbxImportUI()
@@ -199,7 +208,27 @@ class UnrealAssetOps:
 
         task.set_editor_property("options", fbx_options)
 
-        unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        # 临时恢复 Interchange FBX CVar，确保走 Interchange 管线
+        prev_fbx_flag = unreal.SystemLibrary.get_console_variable_int_value(
+            self._CVAR_INTERCHANGE_FBX
+        )
+        if prev_fbx_flag == 0:
+            logger.info(
+                "Temporarily enabling %s for FBX import (was disabled by third-party plugin)",
+                self._CVAR_INTERCHANGE_FBX,
+            )
+            unreal.SystemLibrary.execute_console_command(
+                None, f"{self._CVAR_INTERCHANGE_FBX} 1"
+            )
+        try:
+            unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        finally:
+            # 无论导入成功与否，都恢复原始 CVar 值
+            if prev_fbx_flag == 0:
+                unreal.SystemLibrary.execute_console_command(
+                    None, f"{self._CVAR_INTERCHANGE_FBX} 0"
+                )
+                logger.info("Restored %s to 0", self._CVAR_INTERCHANGE_FBX)
 
         # 收集导入的资产
         imported = task.get_editor_property("imported_object_paths")
