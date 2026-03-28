@@ -166,6 +166,46 @@ class PhotoshopBridge(IMonitorCallback):
             return
         self._launch_photoshop(ps_path, export_path)
 
+    def open_selected_as_png(self) -> None:
+        """以 PNG 格式在 Photoshop 中打开选中的贴图（保留透明通道，适合 UI 贴图）。"""
+        ps_path = self._find_photoshop()
+        if not ps_path:
+            return
+        export_path = self._export_texture_as_png()
+        if export_path is None:
+            return
+        self._launch_photoshop(ps_path, export_path)
+
+    def _export_texture_as_png(self) -> Optional[List[Tuple[str, str]]]:
+        """直接导出选中的贴图为 PNG（不经过 TGA/PSD 转换，透明通道完整保留）。"""
+        assets = unreal.EditorUtilityLibrary.get_selected_assets()
+        texture_assets = [a for a in assets if isinstance(a, unreal.Texture2D)]
+
+        if not texture_assets:
+            unreal.EditorDialog.show_message(
+                title="错误",
+                message="请选择一个贴图资产",
+                message_type=unreal.AppMsgType.OK,
+            )
+            return None
+
+        request = []
+        temp_dir = os.environ.get("TEMP", "")
+        for asset in texture_assets:
+            png_temp_path = os.path.join(temp_dir, f"{asset.get_name()}.png")
+
+            task = unreal.AssetExportTask()
+            task.set_editor_property("automated", True)
+            task.set_editor_property("filename", png_temp_path)
+            task.set_editor_property("object", asset)
+            task.set_editor_property("prompt", False)
+            task.set_editor_property("exporter", unreal.TextureExporterPNG())
+            unreal.Exporter.run_asset_export_task(task)
+
+            request.append((png_temp_path, asset.get_path_name()))
+
+        return request
+
     def _save_to_psd(self, tga_path: str, save_path: str) -> None:
         image = Image.open(tga_path)
         image_obj = image.convert("RGBA")

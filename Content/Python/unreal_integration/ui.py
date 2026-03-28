@@ -302,6 +302,20 @@ class AssetCustomsUI:
         except Exception:
             pass
 
+        ps_png_cmd = self._build_python_command("on_send_to_photoshop_as_png")
+        ps_png_entry = self.make_py_entry(
+            entry_name=f"{section}.SendToPhotoshopPNG",
+            label="Send to Photoshop (PNG)",
+            tooltip="以 PNG 格式在 Photoshop 中打开（保留透明通道，适合 UI 贴图）",
+            python=ps_png_cmd,
+            is_toolbar=False,
+            icon={"style_set": "EditorStyle", "style_name": "ContentBrowser.AssetActions"},
+        )
+        try:
+            send_menu.add_menu_entry("Send", ps_png_entry)
+        except Exception:
+            pass
+
         sp_cmd = self._build_python_command("on_send_to_substance_painter")
         sp_entry = self.make_py_entry(
             entry_name=f"{section}.SendToSubstancePainter",
@@ -416,8 +430,35 @@ class AssetCustomsUI:
         """一次性注册并刷新 UI。"""
         if self.cfg.get("dropdown_from_configs", False):
             self._register_toolbar_dropdown_from_configs()
+        self._register_clipboard_paste_button()
         self._register_asset_context_menu()
         self._register_actor_context_menu()
         for _key, e in (self.cfg.get("entries") or {}).items():
             self.register_entry(e)
         self.menus.refresh_all_widgets()
+
+    # ---- Clipboard PNG Paste (M11) ----
+
+    def _register_clipboard_paste_button(self) -> None:
+        """在 Content Browser 工具栏注册「📋 Paste PNG」按钮。"""
+        toolbar_path = self.cfg.get("toolbar_menu_path") or "ContentBrowser.Toolbar"
+        section = self.cfg.get("section") or "AssetCustoms"
+
+        paste_cmd = self._build_python_command("on_paste_clipboard_png")
+        paste_entry = self.make_py_entry(
+            entry_name=f"{section}.PasteClipboardPNG",
+            label="\U0001f4cb Paste PNG",
+            tooltip="从剪贴板粘贴 PNG 图片导入到当前目录\nPaste PNG image from clipboard into current folder",
+            python=paste_cmd,
+            is_toolbar=True,
+            icon={"style_set": "EditorStyle", "style_name": "Icons.Import"},
+        )
+        menu = self.menus.extend_menu(toolbar_path)
+        try:
+            menu.add_section(section, section)
+        except Exception:
+            pass
+        try:
+            menu.add_menu_entry(section, paste_entry)
+        except Exception:
+            pass

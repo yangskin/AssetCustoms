@@ -283,6 +283,14 @@ class AssetCustomsActions:
             self._ps_bridge = PhotoshopBridge()
         self._ps_bridge.open_selected()
 
+    def on_send_to_photoshop_as_png(self) -> None:
+        """以 PNG 格式发送选中的贴图到 Photoshop（保留透明通道，适合 UI 贴图）。"""
+        from unreal_integration.photoshop_bridge import PhotoshopBridge
+
+        if not hasattr(self, "_ps_bridge"):
+            self._ps_bridge = PhotoshopBridge()
+        self._ps_bridge.open_selected_as_png()
+
     # ---- Send to Substance Painter ----
     def on_send_to_substance_painter(self) -> None:
         """发送选中的 StaticMesh 到 Substance Painter。"""
@@ -405,3 +413,108 @@ class AssetCustomsActions:
                 unreal.log(f"[AssetCustoms] Cleared profile on {p}")
             except Exception as ex:
                 unreal.log_error(f"[AssetCustoms] Failed to clear profile on {p}: {ex}")
+
+    # ---- Clipboard PNG Paste (M11) ----
+
+    def on_paste_clipboard_png(self) -> None:
+        """从 Windows 剪贴板读取 PNG 图片并导入到 Content Browser 当前目录。"""
+        import os
+        import tempfile
+        import uuid
+
+        image = self._grab_clipboard_image()
+        if image is None:
+            msg = "剪贴板中没有图片。\nNo image found in clipboard."
+            unreal.log_warning(f"[AssetCustoms] {msg}")
+            try:
+                unreal.EditorDialog.show_message("Paste PNG", msg, unreal.AppMsgType.OK)
+            except Exception:
+                pass
+            return
+
+        # 保存到临时文件
+        short_id = uuid.uuid4().hex[:8]
+        tmp_dir = tempfile.gettempdir()
+        filename = f"T_Pasted_{short_id}.png"
+        tmp_path = os.path.join(tmp_dir, filename)
+        try:
+            image.save(tmp_path, "PNG")
+        except Exception as ex:
+            unreal.log_error(f"[AssetCustoms] 保存临时 PNG 失败: {ex}")
+            return
+        finally:
+            try:
+                image.close()
+            except Exception:
+                pass
+
+        # 导入到 Content Browser 当前目录
+        dest_path = self._get_content_browser_path()
+        asset_name = os.path.splitext(filename)[0]
+        try:
+            task = unreal.AssetImportTask()
+            task.set_editor_property("filename", tmp_path)
+            task.set_editor_property("destination_path", dest_path)
+            task.set_editor_property("destination_name", asset_name)
+            task.set_editor_property("replace_existing", False)
+            task.set_editor_property("automated", True)
+            task.set_editor_property("save", True)
+
+            unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+            unreal.log(f"[AssetCustoms] 剪贴板图片已导入: {dest_path}/{asset_name}")
+        except Exception as ex:
+            unreal.log_error(f"[AssetCustoms] 导入失败: {ex}")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    def _grab_clipboard_image(self):
+        """从剪贴板获取图片，返回 PIL.Image 或 None。
+
+        主路径：PIL.ImageGrab.grabclipboard()
+        回退路径：PySide6 QClipboard
+        """
+        # 主路径：PIL
+        try:
+            from PIL import ImageGrab, Image as PILImage
+
+            result = ImageGrab.grabclipboard()
+            if result is None:
+                raise RuntimeError("grabclipboard returned None")
+            if isinstance(result, PILImage.Image):
+                return result
+            # CF_HDROP：文件路径列表
+            if isinstance(result, list):
+                for fpath in result:
+                    low = str(fpath).lower()
+                    if low.endswith((".png", ".jpg", ".jpeg", ".bmp", ".tga", ".tiff")):
+                        return PILImage.open(str(fpath))
+                raise RuntimeError("clipboard file list contains no image files")
+        except Exception as pil_ex:
+            unreal.log_warning(f"[AssetCustoms] PIL 剪贴板读取失败，尝试 PySide6 回退: {pil_ex}")
+
+        # 回退路径：PySide6
+        try:
+            import unreal_qt
+            unreal_qt.setup()
+            from PySide6.QtWidgets import QApplication
+            from PySide6.QtGui import QImage
+            from PIL import Image as PILImage
+            import io
+
+            clipboard = QApplication.clipboard()
+            qimg = clipboard.image()
+            if qimg is None or qimg.isNull():
+                return None
+            # QImage → PIL.Image
+            qimg = qimg.convertToFormat(QImage.Format.Format_RGBA8888)
+            width, height = qimg.width(), qimg.height()
+            ptr = qimg.constBits()
+            raw_bytes = bytes(ptr)
+            pil_img = PILImage.frombytes("RGBA", (width, height), raw_bytes)
+            return pil_img
+        except Exception as qt_ex:
+            unreal.log_warning(f"[AssetCustoms] PySide6 剪贴板读取也失败: {qt_ex}")
+            return None
