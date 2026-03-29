@@ -1,9 +1,11 @@
 #include "AssetCustomsEditorModule.h"
 #include "WidgetPasteImageAction.h"
+#include "SendToPhotoshopAction.h"
 
 #include "WidgetBlueprintEditor.h"
 #include "WidgetBlueprint.h"
 #include "UMGEditorModule.h"
+#include "IHasWidgetContextMenuExtensibility.h"
 #include "Framework/Commands/Commands.h"
 #include "Framework/Commands/UICommandList.h"
 #include "Framework/MultiBox/MultiBoxBuilder.h"
@@ -81,6 +83,7 @@ void FAssetCustomsEditorModule::StartupModule()
 {
     FAssetCustomsCommands::Register();
     RegisterWidgetEditorMenu();
+    RegisterWidgetContextMenuExtension();
 
     // Bind shortcut to each Widget Blueprint Editor as it opens
     if (GEditor)
@@ -105,6 +108,7 @@ void FAssetCustomsEditorModule::ShutdownModule()
         }
     }
 
+    UnregisterWidgetContextMenuExtension();
     UnregisterWidgetEditorMenu();
     FAssetCustomsCommands::Unregister();
 }
@@ -195,6 +199,40 @@ void FAssetCustomsEditorModule::UnregisterWidgetEditorMenu()
         }
     }
     WidgetMenuExtender.Reset();
+}
+
+void FAssetCustomsEditorModule::RegisterWidgetContextMenuExtension()
+{
+    SendToPhotoshopExtension = MakeShared<FSendToPhotoshopExtension>();
+
+    if (FModuleManager::Get().IsModuleLoaded(TEXT("UMGEditor")))
+    {
+        IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
+        UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->AddExtension(SendToPhotoshopExtension.ToSharedRef());
+    }
+    else
+    {
+        FModuleManager::Get().OnModulesChanged().AddLambda(
+            [this](FName ModuleName, EModuleChangeReason Reason)
+            {
+                if (ModuleName == TEXT("UMGEditor") && Reason == EModuleChangeReason::ModuleLoaded
+                    && SendToPhotoshopExtension.IsValid())
+                {
+                    IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
+                    UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->AddExtension(SendToPhotoshopExtension.ToSharedRef());
+                }
+            });
+    }
+}
+
+void FAssetCustomsEditorModule::UnregisterWidgetContextMenuExtension()
+{
+    if (SendToPhotoshopExtension.IsValid() && FModuleManager::Get().IsModuleLoaded(TEXT("UMGEditor")))
+    {
+        IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
+        UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->RemoveExtension(SendToPhotoshopExtension.ToSharedRef());
+    }
+    SendToPhotoshopExtension.Reset();
 }
 
 #undef LOCTEXT_NAMESPACE

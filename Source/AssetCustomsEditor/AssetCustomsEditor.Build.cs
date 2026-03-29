@@ -38,6 +38,7 @@ public class AssetCustomsEditor : ModuleRules
             "AssetRegistry",
             "ApplicationCore",
             "InputCore",
+            "PythonScriptPlugin",
         });
     }
 }

@@ -115,14 +115,26 @@ class TextureMonitor(TickTimer):
         }
 
     def _do_reimport(self) -> None:
-        import_data = unreal.AutomatedAssetImportData()
-        import_data.set_editor_property(
-            "destination_path", os.path.dirname(self.asset_path)
+        dest_path = self.asset_path.rsplit("/", 1)[0]
+        dest_name = self.asset_path.rsplit("/", 1)[-1].split(".")[0]
+
+        # Temporarily disable Content Browser sync to prevent focus steal
+        unreal.SystemLibrary.execute_console_command(
+            None, "Interchange.FeatureFlags.Import.SyncToBrowser 0"
         )
-        import_data.set_editor_property("filenames", [self.texture_path])
-        import_data.set_editor_property("replace_existing", True)
-        tools = unreal.AssetToolsHelpers.get_asset_tools()
-        tools.import_assets_automated(import_data)
+        try:
+            task = unreal.AssetImportTask()
+            task.set_editor_property("automated", True)
+            task.set_editor_property("filename", self.texture_path)
+            task.set_editor_property("destination_path", dest_path)
+            task.set_editor_property("destination_name", dest_name)
+            task.set_editor_property("replace_existing", True)
+            task.set_editor_property("save", False)
+            unreal.AssetToolsHelpers.get_asset_tools().import_asset_tasks([task])
+        finally:
+            unreal.SystemLibrary.execute_console_command(
+                None, "Interchange.FeatureFlags.Import.SyncToBrowser 1"
+            )
 
     def _restore_texture_settings(self, texture, settings: dict) -> None:
         for prop, value in settings.items():
@@ -175,6 +187,37 @@ class PhotoshopBridge(IMonitorCallback):
         if export_path is None:
             return
         self._launch_photoshop(ps_path, export_path)
+
+    def open_texture_by_path_as_png(self, asset_path: str) -> None:
+        """通过资产路径在 Photoshop 中打开贴图（PNG 格式）。
+
+        供 C++ Widget 右键菜单调用，无需 Content Browser 选中。
+        """
+        ps_path = self._find_photoshop()
+        if not ps_path:
+            return
+
+        asset = unreal.EditorAssetLibrary.load_asset(asset_path)
+        if not isinstance(asset, unreal.Texture2D):
+            unreal.EditorDialog.show_message(
+                title="错误",
+                message=f"不是 Texture2D 资产: {asset_path}",
+                message_type=unreal.AppMsgType.OK,
+            )
+            return
+
+        temp_dir = os.environ.get("TEMP", "")
+        png_temp_path = os.path.join(temp_dir, f"{asset.get_name()}.png")
+
+        task = unreal.AssetExportTask()
+        task.set_editor_property("automated", True)
+        task.set_editor_property("filename", png_temp_path)
+        task.set_editor_property("object", asset)
+        task.set_editor_property("prompt", False)
+        task.set_editor_property("exporter", unreal.TextureExporterPNG())
+        unreal.Exporter.run_asset_export_task(task)
+
+        self._launch_photoshop(ps_path, [(png_temp_path, asset_path)])
 
     def _export_texture_as_png(self) -> Optional[List[Tuple[str, str]]]:
         """直接导出选中的贴图为 PNG（不经过 TGA/PSD 转换，透明通道完整保留）。"""
