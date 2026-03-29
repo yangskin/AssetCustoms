@@ -55,13 +55,16 @@ void FSendToPhotoshopExtension::ExtendContextMenu(
                         return;
                     }
 
-                    // Escape backslashes for Python string
-                    FString EscapedPath = AssetPath.Replace(TEXT("\\"), TEXT("\\\\"));
+                    // Escape backslashes and single quotes for Python string
+                    FString EscapedPath = AssetPath.Replace(TEXT("\\"), TEXT("\\\\")).Replace(TEXT("'"), TEXT("\\'"));
                     FString PythonCommand = FString::Printf(
                         TEXT("from unreal_integration.photoshop_bridge import PhotoshopBridge; PhotoshopBridge().open_texture_by_path_as_png('%s')"),
                         *EscapedPath);
 
-                    PythonPlugin->ExecPythonCommand(*PythonCommand);
+                    if (!PythonPlugin->ExecPythonCommand(*PythonCommand))
+                    {
+                        UE_LOG(LogTemp, Warning, TEXT("SendToPhotoshop: Python command failed for '%s'"), *AssetPath);
+                    }
                 })
             )
         );

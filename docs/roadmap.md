@@ -1,6 +1,6 @@
-# 路线图 / 里程碑（V1.4）
+# 路线图 / 里程碑（V1.5）
 
-版本: V1.4（Texture Size Control + Resolution Authority）  |  状态: M9 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-26
+版本: V1.5（Widget Send to Photoshop）  |  状态: M12 已完成  |  负责人: （您的名字/TA团队）  |  最后更新: 2026-03-30
 
 本文件用于跟踪项目阶段性目标与关键里程碑，确保对齐产品价值与技术落地节奏。
 
@@ -491,6 +491,46 @@ V1.1 核心目标：在多管线（角色/场景等）下，100% 自动化完成
 |------|----------|
 | `sp_bridge.py` | `_send_selected_impl()` 增加 Actor→StaticMesh 提取逻辑 + `_extract_mesh_from_selected_actors()` |
 | `ui.py` | 新增 `_register_actor_context_menu()` 在 `LevelEditor.ActorContextMenu` 注册 Send 子菜单 |
+
+## M11 — Widget 编辑器粘贴图片 ✅（已完成 2026-03-29）
+
+**目标**：在 UMG Widget 编辑器中通过菜单或快捷键（`Ctrl+Shift+V`）将剪贴板图片粘贴为 Image 控件。C++ Editor 模块实现。
+
+**实现**：
+- C++ `AssetCustomsEditor` 模块：`TCommands` + `OnAssetOpenedInEditor` 快捷键注入 + `GetMenuExtensibilityManager` 菜单注册
+- Windows 剪贴板读取（CF_DIB/CF_DIBV5）→ MD5 去重 → Texture2D 创建保存 → Image 控件
+
+| 文件 | 变更说明 |
+|------|----------|
+| `AssetCustomsEditorModule.h/cpp` | 模块入口、快捷键注入、菜单注册 |
+| `ClipboardImageUtils.h/cpp` | Windows 剪贴板图像读取 |
+| `WidgetPasteImageAction.h/cpp` | 粘贴动作：去重 + Texture 创建 + Image 控件 |
+| `AssetCustomsEditor.Build.cs` | C++ 模块构建配置 |
+
+## M12 — Widget Image 右键发送到 Photoshop ✅（已完成 2026-03-30）
+
+**目标**：在 Widget Blueprint 编辑器中右键选中的 Image 控件，将其贴图以 PNG 格式发送到 Photoshop。
+
+**技术路径**：
+- C++ `IWidgetContextMenuExtension` 扩展 Widget 右键菜单
+- C++ `IPythonScriptPlugin::ExecPythonCommand()` 调用 Python
+- Python `PhotoshopBridge.open_texture_by_path_as_png(asset_path)` 处理导出 + PS 启动
+- reimport 时临时禁用 CVar `Interchange.FeatureFlags.Import.SyncToBrowser` 防止焦点切换
+
+| 文件 | 变更说明 |
+|------|----------|
+| `SendToPhotoshopAction.h/cpp` | 新建：`FSendToPhotoshopExtension` 右键菜单扩展 |
+| `AssetCustomsEditorModule.h/cpp` | 新增 `RegisterWidgetContextMenuExtension` 注册/注销 |
+| `AssetCustomsEditor.Build.cs` | 新增 `PythonScriptPlugin` 依赖 |
+| `AssetCustoms.uplugin` | 新增 `PythonScriptPlugin` 插件声明 |
+| `photoshop_bridge.py` | 新增 `open_texture_by_path_as_png()`；`_do_reimport` 防焦点切换 |
+
+**健壮性保障**：
+- 资产路径单引号转义（防 Python 字符串注入）
+- `ExecPythonCommand` 失败时记录日志
+- CVar `finally` 块恢复（异常时也确保还原）
+- 仅当选中单个 UImage 且包含有效 Texture2D 时才显示菜单项
+
 ## 风险与假设
 - UE Python 环境与依赖管理差异大：Pillow、json5 建议随插件内置或提供等价注释剥离方案。
 - 文件名/贴图规则存在多样性：必须优先“智能预填充”，回退到规则匹配与分诊 UI。

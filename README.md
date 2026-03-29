@@ -30,7 +30,7 @@
 
 
 
-}    }        });            "ApplicationCore",            "EditorScriptingUtilities",            "ImageCore",            "Kismet",            "UMGEditor",            "UMG",            "UnrealEd",        {        PrivateDependencyModuleNames.AddRange(new string[]        });            "SlateCore",            "Slate",            "Engine",            "CoreUObject",            "Core",        {        PublicDependencyModuleNames.AddRange(new string[]        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;    {    public AssetCustomsEditor(ReadOnlyTargetRules Target) : base(Target){public class AssetCustomsEditor : ModuleRulesusing UnrealBuildTool;> 版本: V1.4（Texture Size Control + Resolution Authority） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
+}    }        });            "ApplicationCore",            "EditorScriptingUtilities",            "ImageCore",            "Kismet",            "UMGEditor",            "UMG",            "UnrealEd",        {        PrivateDependencyModuleNames.AddRange(new string[]        });            "SlateCore",            "Slate",            "Engine",            "CoreUObject",            "Core",        {        PublicDependencyModuleNames.AddRange(new string[]        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;    {    public AssetCustomsEditor(ReadOnlyTargetRules Target) : base(Target){public class AssetCustomsEditor : ModuleRulesusing UnrealBuildTool;> 版本: V1.5（Widget Send to Photoshop） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）+ C++（Editor Module）
 
 AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。同时支持与 Substance Painter（通过配套插件 [SPsync](#跨项目协作spsync)）的双向同步，包括一键发送、配置驱动通道映射、贴图尺寸控制和回传刷新。
 
@@ -196,6 +196,7 @@ print(QtCore.qVersion())
 | **M9** 分辨率权威分离 | `texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096] | ✅ |
 | **M10** Level Editor 发送 | 视口选中 Actor 右键发送到 SP，自动提取 StaticMesh，复用现有管线 | ✅ |
 | **M11** Widget 粘贴图片 | Widget 编辑器菜单/快捷键：剪贴板 PNG → Texture 资产 → Image 控件（C++ 模块） | ✅ |
+| **M12** Widget 发送到 Photoshop | Widget 编辑器右键 Image 控件 → PNG 导出 → 启动 Photoshop（C++ 右键菜单 + Python 桥接） | ✅ |
 
 详见 [`docs/roadmap.md`](docs/roadmap.md)。
 
@@ -237,11 +238,13 @@ WidgetTree->ConstructWidget<UImage>() → SetBrushFromTexture() → Designer 即
 Source/AssetCustomsEditor/
 ├── AssetCustomsEditor.Build.cs
 ├── Public/
-│   └── AssetCustomsEditorModule.h
+│   ├── AssetCustomsEditorModule.h
+│   └── SendToPhotoshopAction.h          # M12 右键菜单扩展声明
 └── Private/
-    ├── AssetCustomsEditorModule.cpp    # 模块入口 + 快捷键注入 + 菜单注册
-    ├── ClipboardImageUtils.h/cpp       # Windows 剪贴板图像读取
-    └── WidgetPasteImageAction.h/cpp    # 粘贴动作：去重 + Texture 创建 + Image 控件
+    ├── AssetCustomsEditorModule.cpp    # 模块入口 + 快捷键注入 + 菜单注册 + 右键扩展注册
+    ├── ClipboardImageUtils.h/cpp       # M11 Windows 剪贴板图像读取
+    ├── SendToPhotoshopAction.cpp       # M12 右键→检测 UImage→Python 发送 PS
+    └── WidgetPasteImageAction.h/cpp    # M11 粘贴动作：去重 + Texture 创建 + Image 控件
 ```
 
 **健壮性保障**：
@@ -251,6 +254,44 @@ Source/AssetCustomsEditor/
 - `MarkBlueprintAsStructurallyModified` 边界保护（bBeingCompiled / BS_BeingCreated 检查）
 
 **平台限制**：剪贴板图像读取仅限 Windows（`#if PLATFORM_WINDOWS`）。
+
+### M12：Widget 编辑器「发送到 Photoshop」功能
+
+在 UMG Widget 编辑器的 Designer 视图中，右键选中的 Image 控件，即可将其绑定的贴图通过 PNG 格式发送到 Photoshop。在 PS 中编辑保存后自动回写 UE，不会抢夺编辑器焦点。
+
+**完整流程**：
+```
+Designer 右键 Image 控件 → 检测 UImage → 获取 FSlateBrush → UTexture2D
+  ↓
+C++ IPythonScriptPlugin::ExecPythonCommand()
+  ↓
+Python PhotoshopBridge.open_texture_by_path_as_png(asset_path)
+  ↓
+AssetExportTask → PNG 导出到 TEMP → subprocess.Popen(photoshop.exe)
+  ↓
+TextureMonitor 轮询文件变化 → 自动重导入（无焦点切换）→ PS 退出后清理临时文件
+```
+
+**主要特性**：
+| 特性 | 说明 |
+|------|------|
+| 右键菜单集成 | `IWidgetContextMenuExtension` 扩展 Widget Designer 右键菜单 |
+| 智能显示 | 仅当选中单个 Image 控件且其 Brush 包含有效 Texture2D 时才显示菜单项 |
+| C++ → Python 桥接 | 通过 `IPythonScriptPlugin::ExecPythonCommand()` 调用 Python |
+| 无焦点切换 | reimport 时临时禁用 `Interchange.FeatureFlags.Import.SyncToBrowser` CVar |
+| 自动监控回写 | TextureMonitor 每秒检测文件变化，保留纹理原始设置（sRGB/压缩/LOD） |
+| 临时文件清理 | Photoshop 退出后自动清理 PNG 临时文件 |
+
+**技术实现**：
+| 环节 | API | 说明 |
+|------|-----|------|
+| 右键菜单注册 | `IUMGEditorModule::GetWidgetContextMenuExtensibilityManager()` | 扩展 Designer 画布 Widget 右键菜单 |
+| Widget 类型检测 | `FWidgetBlueprintEditor::GetSelectedWidgets()` + `Cast<UImage>` | 获取选中 Widget 并验证类型 |
+| 贴图获取 | `UImage::GetBrush()` → `FSlateBrush::GetResourceObject()` | 从 Image 控件提取 UTexture2D |
+| Python 执行 | `IPythonScriptPlugin::ExecPythonCommand()` | C++ 调用 Python 桥接代码 |
+| PNG 导出 | `unreal.TextureExporterPNG` + `AssetExportTask` | Python 端导出贴图为 PNG |
+| PS 启动 | `subprocess.Popen([photoshop.exe, png_path])` | Python 端启动 Photoshop |
+| 防焦点切换 | CVar `Interchange.FeatureFlags.Import.SyncToBrowser` | reimport 时临时禁用 Content Browser 同步 |
 
 ### 跨项目协作（SPsync）
 
@@ -454,11 +495,18 @@ deploy.bat -Clean
 
 ### Q: 如何使用 Send to Photoshop？
 
+**方式一：Content Browser（选中资产）**
 1. 在 Content Browser 中选中一个或多个 Texture2D 资产
-2. 右键 → **Send** → **Send to Photoshop**
-3. 插件会自动导出贴图为 PSD，启动 Photoshop 打开
+2. 右键 → **Send** → **Send to Photoshop**（PSD 格式）或 **Send to Photoshop as PNG**
+3. 插件会自动导出贴图，启动 Photoshop 打开
 4. 在 Photoshop 中编辑并保存后，贴图会自动重新导入到 UE（保留压缩、sRGB、LOD 设置）
 5. 关闭 Photoshop 后临时文件自动清理
+
+**方式二：Widget Blueprint 编辑器（右键 Image 控件）**
+1. 在 Widget Blueprint 的 Designer 视图中选中一个 Image 控件
+2. 右键 → **Send to Photoshop (PNG)**
+3. 控件绑定的贴图会以 PNG 格式发送到 Photoshop
+4. 编辑保存后自动回写，Widget 编辑器焦点不会被切走
 
 > 需要系统已安装 Adobe Photoshop（自动搜索 `C:\Program Files\Adobe\` 路径）。
 
