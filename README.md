@@ -1,6 +1,36 @@
 # AssetCustoms — UE5 资产自动化插件
 
-> 版本: V1.4（Texture Size Control + Resolution Authority） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+}    }        });            "ApplicationCore",            "EditorScriptingUtilities",            "ImageCore",            "Kismet",            "UMGEditor",            "UMG",            "UnrealEd",        {        PrivateDependencyModuleNames.AddRange(new string[]        });            "SlateCore",            "Slate",            "Engine",            "CoreUObject",            "Core",        {        PublicDependencyModuleNames.AddRange(new string[]        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;    {    public AssetCustomsEditor(ReadOnlyTargetRules Target) : base(Target){public class AssetCustomsEditor : ModuleRulesusing UnrealBuildTool;> 版本: V1.4（Texture Size Control + Resolution Authority） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）
 
 AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。同时支持与 Substance Painter（通过配套插件 [SPsync](#跨项目协作spsync)）的双向同步，包括一键发送、配置驱动通道映射、贴图尺寸控制和回传刷新。
 
@@ -165,8 +195,62 @@ print(QtCore.qVersion())
 | **M8** 贴图尺寸控制 | `max_resolution`（int POT）全管线统一：UE 导入 → SP 项目 → SP 导出 | ✅ |
 | **M9** 分辨率权威分离 | `texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096] | ✅ |
 | **M10** Level Editor 发送 | 视口选中 Actor 右键发送到 SP，自动提取 StaticMesh，复用现有管线 | ✅ |
+| **M11** Widget 粘贴图片 | Widget 编辑器菜单/快捷键：剪贴板 PNG → Texture 资产 → Image 控件（C++ 模块） | ✅ |
 
 详见 [`docs/roadmap.md`](docs/roadmap.md)。
+
+### M11：Widget 编辑器「粘贴图片」功能
+
+在 UMG Widget 编辑器中，通过菜单命令或快捷键（`Ctrl+Shift+V`），将系统剪贴板中的截图/PNG 一键粘贴为 Image 控件。
+
+**完整流程**：
+```
+剪贴板（CF_DIB/CF_DIBV5）→ BGRA 像素 → MD5 哈希去重
+  ↓ 新图片                        ↓ 已有相同哈希
+  FImageUtils::CreateTexture      复用已有 Texture
+  → SavePackage 保存到 WBP 同目录
+  ↓
+WidgetTree->ConstructWidget<UImage>() → SetBrushFromTexture() → Designer 即时刷新
+```
+
+**主要特性**：
+| 特性 | 说明 |
+|------|------|
+| 快捷键绑定 | `Ctrl+Shift+V`，通过 `OnAssetOpenedInEditor` 注入 Editor ToolkitCommands |
+| 剪贴板去重 | MD5 哈希像素数据，相同内容自动复用已导入的 Texture |
+| 保存位置 | Texture 自动保存到与 Widget Blueprint 相同的 Content 目录 |
+| 弹窗提示 | 剪贴板无图片时弹出编辑器通知，避免静默失败 |
+| Windows 剪贴板 | 支持 CF_DIB（24/32位）和 CF_DIBV5（含 Alpha），正确处理 BI_BITFIELDS |
+
+**技术实现**：
+| 环节 | API | 说明 |
+|------|-----|------|
+| 剪贴板读取 | Win32 `OpenClipboard` + `GetClipboardData(CF_DIBV5/CF_DIB)` | 解析 BITMAPINFOHEADER → BGRA 像素 |
+| 去重检测 | `FMD5` + `UEditorAssetLibrary::LoadAsset` | 像素 MD5 哈希 → 资产名 `T_Pasted_{hash8}` |
+| 纹理创建 | `FImageUtils::CreateTexture(ETextureClass::TwoD, ...)` | 持久化 Texture2D + `SavePackage` 写入磁盘 |
+| Image 控件 | `WidgetTree->ConstructWidget<UImage>()` + `SetBrushFromTexture()` | 添加到 CanvasPanel，自动匹配图片尺寸 |
+| 快捷键注册 | `UAssetEditorSubsystem::OnAssetOpenedInEditor()` → `ToolkitCommands` | 每个 Widget 编辑器实例均绑定快捷键 |
+| 菜单注册 | `IUMGEditorModule::GetMenuExtensibilityManager()` | Edit 菜单 → "AssetCustoms" 分区 |
+
+**模块结构**（C++ Editor 模块）：
+```
+Source/AssetCustomsEditor/
+├── AssetCustomsEditor.Build.cs
+├── Public/
+│   └── AssetCustomsEditorModule.h
+└── Private/
+    ├── AssetCustomsEditorModule.cpp    # 模块入口 + 快捷键注入 + 菜单注册
+    ├── ClipboardImageUtils.h/cpp       # Windows 剪贴板图像读取
+    └── WidgetPasteImageAction.h/cpp    # 粘贴动作：去重 + Texture 创建 + Image 控件
+```
+
+**健壮性保障**：
+- 像素数据大小校验（graceful 返回，不使用 `check()` 崩溃）
+- CF_DIBV5 `BI_BITFIELDS` 偏移正确处理（V5 头已包含掩码字段）
+- `WidgetVariableNameToGuidMap` 修复（防止 BP 编译 ensure 断言）
+- `MarkBlueprintAsStructurallyModified` 边界保护（bBeingCompiled / BS_BeingCreated 检查）
+
+**平台限制**：剪贴板图像读取仅限 Windows（`#if PLATFORM_WINDOWS`）。
 
 ### 跨项目协作（SPsync）
 

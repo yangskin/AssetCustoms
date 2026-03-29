@@ -1,10 +1,10 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0",
+	"VersionName": "1.1",
 	"FriendlyName": "AssetCustoms",
-	"Description": "",
-	"Category": "Other",
+	"Description": "Asset automation plugin: standardized import pipeline, cross-tool sync, and Widget editor paste image.",
+	"Category": "Editor",
 	"CreatedBy": "",
 	"CreatedByURL": "",
 	"DocsURL": "",
@@ -13,5 +13,18 @@
 	"CanContainContent": true,
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
-	"Installed": false
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "AssetCustomsEditor",
+			"Type": "Editor",
+			"LoadingPhase": "PostEngineInit"
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true
+		}
+	]
 }
