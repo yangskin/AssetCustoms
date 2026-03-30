@@ -6,6 +6,7 @@
 #include "Components/Image.h"
 #include "Components/CanvasPanel.h"
 #include "Components/CanvasPanelSlot.h"
+#include "Components/PanelWidget.h"
 #include "Engine/Texture2D.h"
 #include "ImageUtils.h"
 #include "ImageCore.h"
@@ -210,10 +211,31 @@ void WidgetPasteImageAction::Execute(UWidgetBlueprint* WidgetBlueprint)
         return;
     }
 
-    UCanvasPanel* RootCanvas = Cast<UCanvasPanel>(WidgetTree->RootWidget);
-    if (!RootCanvas)
+    // Find the first CanvasPanel in the tree (root or nested)
+    UCanvasPanel* TargetCanvas = nullptr;
+    UPanelWidget* FallbackPanel = nullptr;
+
+    WidgetTree->ForEachWidget([&](UWidget* Widget)
     {
-        UE_LOG(LogAssetCustoms, Error, TEXT("PasteImage: Root widget is not a Canvas Panel"));
+        if (TargetCanvas) return; // already found
+        if (UCanvasPanel* Canvas = Cast<UCanvasPanel>(Widget))
+        {
+            TargetCanvas = Canvas;
+        }
+        else if (!FallbackPanel)
+        {
+            if (UPanelWidget* Panel = Cast<UPanelWidget>(Widget))
+            {
+                FallbackPanel = Panel;
+            }
+        }
+    });
+
+    if (!TargetCanvas && !FallbackPanel)
+    {
+        UE_LOG(LogAssetCustoms, Error, TEXT("PasteImage: No suitable panel found in widget tree"));
+        ShowNotification(
+            NSLOCTEXT("AssetCustoms", "NoPanelFound", "No Canvas Panel or other panel found in widget tree.\nAdd a panel widget first."));
         return;
     }
 
@@ -228,11 +250,18 @@ void WidgetPasteImageAction::Execute(UWidgetBlueprint* WidgetBlueprint)
     // Bind texture and match original image size
     ImageWidget->SetBrushFromTexture(Texture, /*bMatchSize=*/ true);
 
-    // Add to canvas
-    UCanvasPanelSlot* Slot = RootCanvas->AddChildToCanvas(ImageWidget);
-    if (Slot)
+    // Add to the best available panel
+    if (TargetCanvas)
     {
-        Slot->SetAutoSize(true);
+        UCanvasPanelSlot* Slot = TargetCanvas->AddChildToCanvas(ImageWidget);
+        if (Slot)
+        {
+            Slot->SetAutoSize(true);
+        }
+    }
+    else
+    {
+        FallbackPanel->AddChild(ImageWidget);
     }
 
     // Step 5: Mark dirty and trigger immediate recompilation so Designer refreshes
