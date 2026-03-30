@@ -1,151 +1,308 @@
 # AssetCustoms — UE5 资产自动化插件
 
+> 版本: V1.5（Widget Send to Photoshop）
+> 引擎: Unreal Engine 5.7
+> 语言: Python（UE Editor Python）+ C++（Editor Module）
 
+AssetCustoms 是一个给 Unreal Engine 项目用的资产自动化插件。
 
+说人话，它做的事很简单：把外部素材导进 UE 这件事，从“每次靠人手动收拾”变成“按项目规则自动整理好”。
 
+它不只是导入工具，还负责把资产处理成团队能直接用的状态，比如命名统一、贴图通道整理、材质实例创建、导入参数设置，以及和 Photoshop、Substance Painter 的往返修改。
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-}    }        });            "ApplicationCore",            "EditorScriptingUtilities",            "ImageCore",            "Kismet",            "UMGEditor",            "UMG",            "UnrealEd",        {        PrivateDependencyModuleNames.AddRange(new string[]        });            "SlateCore",            "Slate",            "Engine",            "CoreUObject",            "Core",        {        PublicDependencyModuleNames.AddRange(new string[]        PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;    {    public AssetCustomsEditor(ReadOnlyTargetRules Target) : base(Target){public class AssetCustomsEditor : ModuleRulesusing UnrealBuildTool;> 版本: V1.5（Widget Send to Photoshop） | 引擎: Unreal Engine 5.7 | 语言: Python（UE Editor Python）+ C++（Editor Module）
-
-AssetCustoms 是 UE 编辑器 Python 插件，定位为项目资产管线的「标准化守门员」。它将外部"数字毛坯"资产通过 TA 配置的自动化工作流实现**一键转化**，生成符合规范的生产就绪资产（命名、PBR 贴图打包、材质实例创建、导入设置）。同时支持与 Substance Painter（通过配套插件 [SPsync](#跨项目协作spsync)）的双向同步，包括一键发送、配置驱动通道映射、贴图尺寸控制和回传刷新。
-
-> **注意**：AssetCustoms（UE 侧）与 SPsync（SP 侧）是**独立发布**的两个插件，分别安装在 UE 项目和 SP 插件目录中。
+> 注意：AssetCustoms 是 UE 侧插件；SPsync 是 Substance Painter 侧插件。两者配合使用，但分别安装、分别发布。
 
 ---
 
 ## 目录
 
-- [快速开始](#快速开始)
-- [部署指南](#部署指南)
-- [功能概览](#功能概览)
-- [配置架构：Input → Processing → Output 三段式模型](#配置架构input--processing--output-三段式模型)
-- [目录结构](#目录结构)
-- [开发与测试](#开发与测试)
-- [文档导航](#文档导航)
+- [功能定位](#功能定位)
+- [主要功能](#主要功能)
+- [如何部署](#如何部署)
+- [细节说明](#细节说明)
 - [常见问题](#常见问题)
 
 ---
 
-## 快速开始
+## 功能定位
+
+### 它是干什么的？
+
+AssetCustoms 的定位可以概括成一句话：
+
+**它是项目资产管线里的“标准化守门员”。**
+
+外部资产进项目以后，最麻烦的通常不是“导进来”，而是后面那一串重复劳动：
+
+- 命名要不要改
+- 贴图怎么识别
+- 哪张图进哪个材质参数
+- 导入设置怎么统一
+- 贴图尺寸怎么限制
+- 做完以后怎么回到 Photoshop 或 Substance Painter 继续改
+
+AssetCustoms 就是把这些重复操作收进一套配置驱动的流程里。
+
+### 它解决什么问题？
+
+如果团队里遇到下面这些情况，这个插件就有价值：
+
+- 同一种资产，不同人导入出来的结果不一样
+- 贴图命名和通道经常出错，TA 总要返工
+- 材质实例创建、参数绑定、导入设置全靠手工点
+- UE 和 Photoshop / Substance Painter 来回改图太慢
+- 项目想把资产规范固化下来，但总是落不到工具层
+
+### 它适合谁用？
+
+- TA：把项目规范工具化，减少人工兜底
+- 美术：少点菜单，少做重复操作，改完能快速回写
+- 技术美术 / 工具开发：把流程做成可维护、可扩展的管线
+- UI 美术：Widget 贴图可以直接粘贴、直接送 Photoshop
+
+### 一句话介绍版本
+
+如果你要在汇报、立项或者 README 首屏里快速介绍它，可以直接用这句：
+
+> AssetCustoms 是一个面向 UE5 项目的资产自动化插件，用配置驱动方式把外部素材整理成符合项目规范的可用资产，并打通 UE 与 Photoshop、Substance Painter 的往返编辑流程。
+
+---
+
+## 主要功能
+
+下面按使用者最关心的角度来讲，不按开发代号来堆功能名。
+
+### 1. 资产导入后自动标准化
+
+这是插件最核心的能力。
+
+导入 FBX、贴图和相关资源后，插件可以按配置自动完成下面这些事：
+
+- 扫描并加载 Profile 配置
+- 识别贴图类型和用途
+- 处理 FBX 内嵌贴图
+- 检查资产数量、材质、贴图映射是否完整
+- 发现问题时弹出分诊界面，而不是静默失败
+- 自动重命名资产
+- 自动创建材质实例
+- 自动把贴图绑定到正确的材质参数
+- 自动应用统一的导入设置
+- 自动做清理和收尾
+
+简单说，就是把“导入后整理资产”这件事批量自动化了。
+
+### 2. 配置驱动，而不是写死规则
+
+AssetCustoms 不是把规则写死在代码里，而是把流程拆成了三段：
+
+- `input`：识别进来的是什么
+- `processing`：决定怎么处理
+- `output`：决定最终怎么落到项目里
+
+这意味着它适合项目长期使用。规则变了，多数情况下改配置就行，不用每次改代码。
+
+同时还提供了 Config Editor，可以直接在图形界面里编辑配置，而不是全靠手改 JSONC。
+
+### 3. 支持批量处理
+
+如果一次要导很多资产，插件支持多 FBX 批处理和分诊排队，不需要一个个手动处理。
+
+这个能力对外包交付、资产集中入库、阶段性合并内容时很有用。
+
+### 4. Photoshop 往返编辑
+
+插件支持从 UE 里直接把贴图送到 Photoshop，改完保存后自动回写。
+
+目前支持两类场景：
+
+- Content Browser 里选中 Texture2D，右键发送到 Photoshop
+- Widget Blueprint 编辑器里选中 Image 控件，把它绑定的贴图直接发到 Photoshop
+
+这套流程的价值不在“能打开 PS”，而在于：
+
+- 自动导出
+- 自动监控文件变化
+- 自动重新导入 UE
+- 尽量保留原来的压缩、sRGB、LOD 等设置
+- 避免编辑器被强行抢焦点
+
+### 5. Substance Painter 往返同步
+
+AssetCustoms 可以把 Static Mesh 从 UE 发送到 Substance Painter，并通过 SPsync 完成双向协作。
+
+支持的入口包括：
+
+- Content Browser 右键发送 StaticMesh
+- Level Editor 里选中 Actor 后右键发送
+
+发送后，工具会自动做这些事：
+
+- 收集材质信息
+- 导出 FBX 和贴图
+- 把数据包发送到 SP
+- 按 Config Profile 建立通道映射
+- 编辑完成后从 SP 回传到 UE
+
+如果团队日常在 UE 和 SP 之间反复来回，这个能力能省掉大量重复动作。
+
+### 6. 贴图尺寸统一控制
+
+`max_resolution` 会贯穿整条流程：
+
+- UE 导入时限制最大贴图尺寸
+- SP 创建项目时设定 TextureSet 分辨率
+- SP 导出时控制最终输出尺寸
+
+这对控制项目贴图规格特别重要，能避免“有人导 4K，有人导 1K”的混乱情况。
+
+### 7. Widget 编辑器增强
+
+除了资产导入管线，插件还补了一些非常实用的 UI 编辑能力。
+
+#### 粘贴图片到 Widget
+
+在 Widget 编辑器里，可以直接把系统剪贴板里的截图或 PNG 粘贴成 Image 控件。
+
+特点：
+
+- 支持快捷键 `Ctrl+Shift+V`
+- 自动创建 Texture 资产
+- 自动保存到 Widget 同目录
+- 支持去重，重复图片不会反复生成新资产
+- 失败时有明确提示，不会闷声出错
+
+#### Widget 贴图直接送 Photoshop
+
+在 Designer 视图里右键选中的 Image 控件，可以把它绑定的贴图直接发去 Photoshop，改完再自动回到 UE。
+
+这对 UI 迭代很顺手，尤其是需要频繁修图标、面板、按钮贴图的场景。
+
+### 8. 当前已覆盖的能力清单
+
+如果你想快速看功能范围，可以看这张表：
+
+| 模块 | 说明 | 状态 |
+|------|------|------|
+| 配置系统 | JSONC Profile 扫描、加载、校验 | ✅ |
+| 智能导入 | Content Browser 下拉、文件对话框、隔离区导入 | ✅ |
+| 嵌入贴图处理 | FBX 内嵌贴图识别与处理 | ✅ |
+| 检查链 + 分诊 UI | 自动检查并弹出修正界面 | ✅ |
+| 标准化引擎 | 重命名、贴图处理、MIC 创建、材质绑定、清理 | ✅ |
+| 批处理 | 多 FBX 批量导入、分诊排队 | ✅ |
+| Config Editor | Input / Processing / Output 图形化编辑 | ✅ |
+| Photoshop 联动 | 贴图发送到 PS 并自动回写 | ✅ |
+| Substance Painter 联动 | 发送 SM 到 SP，按配置映射并回传 | ✅ |
+| 贴图尺寸控制 | `max_resolution` 全流程统一 | ✅ |
+| Widget 粘贴图片 | 剪贴板图片一键变成 Image 控件 | ✅ |
+| Widget 发送到 Photoshop | Widget 中的 Image 贴图直接送 PS | ✅ |
+
+详细里程碑可参考 [docs/roadmap.md](docs/roadmap.md)。
+
+---
+
+## 如何部署
 
 ### 前置条件
 
 | 项目 | 要求 |
 |------|------|
-| 引擎 | Unreal Engine 5.5+ （当前开发基于 5.7） |
+| 引擎 | Unreal Engine 5.5+（当前开发基于 5.7） |
 | 系统 | Windows 10/11 64-bit |
-| 插件位置 | 项目 `Plugins/AssetCustoms/` 目录下 |
+| 插件位置 | 项目 `Plugins/AssetCustoms/` 目录 |
 
-### 安装步骤（3 步完成）
+### 最快部署方式
 
+如果你只想先跑起来，按这 3 步做就行：
+
+```text
+1. 把 AssetCustoms 文件夹放到项目的 Plugins/ 目录下
+2. 双击 deploy.bat 安装依赖
+3. 启动 UE 编辑器，看到工具栏里的 AssetCustoms 菜单
 ```
-1. 将 AssetCustoms 文件夹放入项目的 Plugins/ 目录
-2. 双击 deploy.bat 安装 Python 依赖
-3. 启动 UE 编辑器，在 Content Browser 工具栏看到 "AssetCustoms" 下拉菜单即成功
-```
-
----
-
-## 部署指南
 
 ### 方式一：双击 deploy.bat（推荐）
 
-**适用场景**：所有 Windows 用户，无需任何配置。
+这是最适合普通用户的方式。
 
-直接**双击** `deploy.bat`，脚本会自动：
-1. 查找系统 PowerShell（`powershell` 或 `pwsh`）
-2. 以 `-ExecutionPolicy Bypass` 调用 `deploy.ps1`（无需修改系统执行策略）
-3. 自动检测 UE 引擎内置 Python 解释器
-4. 优先从 `vendor/` 离线安装 wheel 包（无需网络）
-5. 回退到 PyPI 在线安装（需网络）
-6. 验证 Pillow 和 PySide6 是否可用
+双击 `deploy.bat` 后，脚本会自动完成这些动作：
 
-```
+1. 查找系统里的 PowerShell（`powershell` 或 `pwsh`）
+2. 用 `-ExecutionPolicy Bypass` 调用 `deploy.ps1`
+3. 自动查找 UE 自带的 Python 解释器
+4. 优先从 `vendor/` 安装离线 wheel 包
+5. 如果离线包不可用，再回退到 PyPI 在线安装
+6. 自动验证 Pillow 和 PySide6 是否可用
+
+目录结构大概是这样：
+
+```text
 Plugins/AssetCustoms/
-  deploy.bat          ← 双击此文件
-  deploy.ps1          ← 实际安装逻辑（由 .bat 调用）
-  vendor/             ← 离线 wheel 包
+  deploy.bat
+  deploy.ps1
+  vendor/
     pillow-12.1.1-cp311-cp311-win_amd64.whl
     pyside6_essentials-6.10.2-cp39-abi3-win_amd64.whl
     shiboken6-6.10.2-cp39-abi3-win_amd64.whl
 ```
 
-#### 带参数运行
-
-在命令行（cmd / PowerShell / Terminal）中执行：
+#### 常用参数
 
 ```batch
 :: 默认安装（离线优先）
 deploy.bat
 
-:: 强制在线安装（跳过 vendor/）
+:: 强制在线安装
 deploy.bat -Online
 
-:: 清理已安装包后重新安装
+:: 清理后重新安装
 deploy.bat -Clean
 
-:: 指定 Python 解释器
+:: 手动指定 Python 解释器
 deploy.bat -PythonExe "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe"
 ```
 
 ### 方式二：直接运行 deploy.ps1
 
-**适用场景**：已配置 PowerShell 执行策略的开发者。
+适合已经习惯用 PowerShell 的开发者。
 
 ```powershell
-# 在 AssetCustoms 目录下
+# 在 AssetCustoms 目录下执行
 .\deploy.ps1
 
-# 或显式 bypass
+# 或显式使用 bypass
 powershell -ExecutionPolicy Bypass -File .\deploy.ps1
 ```
 
 ### 方式三：手动 pip 安装
 
-**适用场景**：自动脚本失败时的手动兜底。
+如果自动脚本失败，可以手动装。
 
 ```powershell
-# 找到 UE Python 路径
+# UE 自带 Python 路径示例
 $py = "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe"
 
-# 从 vendor/ 离线安装
+# 从 vendor 离线安装
 & $py -m pip install vendor\pillow-12.1.1-cp311-cp311-win_amd64.whl vendor\pyside6_essentials-6.10.2-cp39-abi3-win_amd64.whl vendor\shiboken6-6.10.2-cp39-abi3-win_amd64.whl --target Content\Python --upgrade --no-deps
 
 # 或从 PyPI 在线安装
 & $py -m pip install -r requirements.txt --target Content\Python --upgrade
 ```
 
-### 验证安装
+### 安装完成后怎么验证？
 
-安装完成后，脚本会自动验证。也可手动检查：
+可以用两种方式检查：
+
+#### 方式一：看编辑器界面
+
+1. 启动 UE 编辑器并打开项目
+2. 打开 Content Browser
+3. 看工具栏里是否出现 `AssetCustoms` 下拉菜单
+
+#### 方式二：看 Python 是否可用
+
+在 UE Editor 的 Python 控制台里执行：
 
 ```python
-# 在 UE Editor 的 Python 控制台执行
 from PIL import Image
 print(Image.__version__)
 
@@ -153,12 +310,17 @@ from PySide6 import QtCore, QtWidgets
 print(QtCore.qVersion())
 ```
 
-### 安装目标与原理
+如果都能正常输出版本号，说明依赖基本没问题。
 
-所有依赖包安装到 `Content/Python/` 目录：
-- UE 启动时自动将插件 `Content/Python/` 加入 `sys.path`
-- 无需修改系统 Python 环境或 UE 引擎文件
-- 各项目独立管理，互不影响
+### 依赖会装到哪里？
+
+所有依赖都会安装到插件自己的 `Content/Python/` 目录。
+
+这样做的好处是：
+
+- 不污染系统 Python
+- 不改 UE 引擎目录
+- 每个项目的依赖可以独立管理
 
 ### 运行时依赖
 
@@ -166,376 +328,286 @@ print(QtCore.qVersion())
 |------|------|------|
 | Pillow | ≥ 10.0.0 | 贴图通道编排、格式转换 |
 | PySide6-Essentials | ≥ 6.5.0 | 分诊 UI、Config Editor 等 Qt 界面 |
-| shiboken6 | ≥ 6.5.0 | PySide6 C++ 绑定运行时 |
-| psd-tools | ≥ 1.9.0 | PSD 文件读写（Send to Photoshop 功能） |
-
-> 离线 wheel 已内置在 `vendor/` 目录，`deploy.bat` 默认优先使用。
+| shiboken6 | ≥ 6.5.0 | PySide6 运行时依赖 |
+| psd-tools | ≥ 1.9.0 | PSD 文件读写（Send to Photoshop） |
 
 ---
 
-## 功能概览
+## 细节说明
 
-### 已完成功能（V1.1）
+### 1. 它是怎么工作的？
 
-| 模块 | 功能 | 状态 |
-|------|------|------|
-| **FR1** 配置系统 | JSONC Profile 扫描/加载/校验（Schema v1.1） | ✅ |
-| **FR2** 智能导入 | Content Browser 下拉、文件对话框、隔离区导入 | ✅ |
-| **FR2.5** 嵌入贴图管线 | FBX 内嵌贴图自动识别、三层匹配、原生处理 | ✅ |
-| **FR3** 检查链 | 资产数量/材质/贴图映射完整性自动检查 | ✅ |
-| **FR4** 分诊 UI | PySide6 TriageWindow，检查失败时弹出修正界面 | ✅ |
-| **FR5** 标准化引擎 | 贴图处理、重命名、MIC 创建、SM→MI 绑定、清理 | ✅ |
-| **M3** 质量体验 | 5s 性能预算、异常隔离、无配置 UI 禁用 | ✅ |
-| **M4** 批处理 | 多 FBX 批量导入、分诊排队 | ✅ |
-| Config Editor | 三页签 GUI 配置编辑器（Input/Processing/Output） | ✅ |
-| 健壮性审计 | 7 项问题修复（内存泄漏、静默异常等） | ✅ |
-| **M5** Config v2.0 | 三段式管线模型（Input→Processing→Output） | ✅ |
-| **M6** Send to Photoshop | Content Browser 右键发送贴图到 PS，自动监控回写 | ✅ |
-| **M7** Send to Substance Painter | 右键发送 SM 到 SP，Config Profile 驱动通道映射，Round-Trip 回传 | ✅ |
-| **M8** 贴图尺寸控制 | `max_resolution`（int POT）全管线统一：UE 导入 → SP 项目 → SP 导出 | ✅ |
-| **M9** 分辨率权威分离 | `texture_size` 来源于导出文件实际尺寸，SP 端 Clamp [128, 4096] | ✅ |
-| **M10** Level Editor 发送 | 视口选中 Actor 右键发送到 SP，自动提取 StaticMesh，复用现有管线 | ✅ |
-| **M11** Widget 粘贴图片 | Widget 编辑器菜单/快捷键：剪贴板 PNG → Texture 资产 → Image 控件（C++ 模块） | ✅ |
-| **M12** Widget 发送到 Photoshop | Widget 编辑器右键 Image 控件 → PNG 导出 → 启动 Photoshop（C++ 右键菜单 + Python 桥接） | ✅ |
+可以把 AssetCustoms 理解成一条自动化管线：
 
-详见 [`docs/roadmap.md`](docs/roadmap.md)。
-
-### M11：Widget 编辑器「粘贴图片」功能
-
-在 UMG Widget 编辑器中，通过菜单命令或快捷键（`Ctrl+Shift+V`），将系统剪贴板中的截图/PNG 一键粘贴为 Image 控件。
-
-**完整流程**：
-```
-剪贴板（CF_DIB/CF_DIBV5）→ BGRA 像素 → MD5 哈希去重
-  ↓ 新图片                        ↓ 已有相同哈希
-  FImageUtils::CreateTexture      复用已有 Texture
-  → SavePackage 保存到 WBP 同目录
-  ↓
-WidgetTree->ConstructWidget<UImage>() → SetBrushFromTexture() → Designer 即时刷新
+```text
+外部资产 -> 识别类型 -> 检查问题 -> 按规则处理 -> 生成规范资产 -> 需要时送去 PS / SP -> 修改后回传 UE
 ```
 
-**主要特性**：
-| 特性 | 说明 |
-|------|------|
-| 快捷键绑定 | `Ctrl+Shift+V`，通过 `OnAssetOpenedInEditor` 注入 Editor ToolkitCommands |
-| 剪贴板去重 | MD5 哈希像素数据，相同内容自动复用已导入的 Texture |
-| 保存位置 | Texture 自动保存到与 Widget Blueprint 相同的 Content 目录 |
-| 弹窗提示 | 剪贴板无图片时弹出编辑器通知，避免静默失败 |
-| Windows 剪贴板 | 支持 CF_DIB（24/32位）和 CF_DIBV5（含 Alpha），正确处理 BI_BITFIELDS |
+也就是说，它不是只负责“导入那一下”，而是尽量覆盖资产从进项目到可继续迭代的整个过程。
 
-**技术实现**：
-| 环节 | API | 说明 |
-|------|-----|------|
-| 剪贴板读取 | Win32 `OpenClipboard` + `GetClipboardData(CF_DIBV5/CF_DIB)` | 解析 BITMAPINFOHEADER → BGRA 像素 |
-| 去重检测 | `FMD5` + `UEditorAssetLibrary::LoadAsset` | 像素 MD5 哈希 → 资产名 `T_Pasted_{hash8}` |
-| 纹理创建 | `FImageUtils::CreateTexture(ETextureClass::TwoD, ...)` | 持久化 Texture2D + `SavePackage` 写入磁盘 |
-| Image 控件 | `WidgetTree->ConstructWidget<UImage>()` + `SetBrushFromTexture()` | 添加到 CanvasPanel，自动匹配图片尺寸 |
-| 快捷键注册 | `UAssetEditorSubsystem::OnAssetOpenedInEditor()` → `ToolkitCommands` | 每个 Widget 编辑器实例均绑定快捷键 |
-| 菜单注册 | `IUMGEditorModule::GetMenuExtensibilityManager()` | Edit 菜单 → "AssetCustoms" 分区 |
+### 2. 配置架构：Input -> Processing -> Output
 
-**模块结构**（C++ Editor 模块）：
-```
-Source/AssetCustomsEditor/
-├── AssetCustomsEditor.Build.cs
-├── Public/
-│   ├── AssetCustomsEditorModule.h
-│   └── SendToPhotoshopAction.h          # M12 右键菜单扩展声明
-└── Private/
-    ├── AssetCustomsEditorModule.cpp    # 模块入口 + 快捷键注入 + 菜单注册 + 右键扩展注册
-    ├── ClipboardImageUtils.h/cpp       # M11 Windows 剪贴板图像读取
-    ├── SendToPhotoshopAction.cpp       # M12 右键→检测 UImage→Python 发送 PS
-    └── WidgetPasteImageAction.h/cpp    # M11 粘贴动作：去重 + Texture 创建 + Image 控件
-```
+V2.0 之后，配置被拆成了三段，目的就是让职责更清楚。
 
-**健壮性保障**：
-- 像素数据大小校验（graceful 返回，不使用 `check()` 崩溃）
-- CF_DIBV5 `BI_BITFIELDS` 偏移正确处理（V5 头已包含掩码字段）
-- `WidgetVariableNameToGuidMap` 修复（防止 BP 编译 ensure 断言）
-- `MarkBlueprintAsStructurallyModified` 边界保护（bBeingCompiled / BS_BeingCreated 检查）
+#### Input
 
-**平台限制**：剪贴板图像读取仅限 Windows（`#if PLATFORM_WINDOWS`）。
+负责回答一个问题：**进来的东西是什么？**
 
-### M12：Widget 编辑器「发送到 Photoshop」功能
+典型内容包括：
 
-在 UMG Widget 编辑器的 Designer 视图中，右键选中的 Image 控件，即可将其绑定的贴图通过 PNG 格式发送到 Photoshop。在 PS 中编辑保存后自动回写 UE，不会抢夺编辑器焦点。
+- 贴图匹配规则
+- 文件名识别方式
+- glob / regex 匹配
+- 优先级
 
-**完整流程**：
-```
-Designer 右键 Image 控件 → 检测 UImage → 获取 FSlateBrush → UTexture2D
-  ↓
-C++ IPythonScriptPlugin::ExecPythonCommand()
-  ↓
-Python PhotoshopBridge.open_texture_by_path_as_png(asset_path)
-  ↓
-AssetExportTask → PNG 导出到 TEMP → subprocess.Popen(photoshop.exe)
-  ↓
-TextureMonitor 轮询文件变化 → 自动重导入（无焦点切换）→ PS 退出后清理临时文件
-```
+#### Processing
 
-**主要特性**：
-| 特性 | 说明 |
-|------|------|
-| 右键菜单集成 | `IWidgetContextMenuExtension` 扩展 Widget Designer 右键菜单 |
-| 智能显示 | 仅当选中单个 Image 控件且其 Brush 包含有效 Texture2D 时才显示菜单项 |
-| C++ → Python 桥接 | 通过 `IPythonScriptPlugin::ExecPythonCommand()` 调用 Python |
-| 无焦点切换 | reimport 时临时禁用 `Interchange.FeatureFlags.Import.SyncToBrowser` CVar |
-| 自动监控回写 | TextureMonitor 每秒检测文件变化，保留纹理原始设置（sRGB/压缩/LOD） |
-| 临时文件清理 | Photoshop 退出后自动清理 PNG 临时文件 |
+负责回答：**识别出来以后怎么处理？**
 
-**技术实现**：
-| 环节 | API | 说明 |
-|------|-----|------|
-| 右键菜单注册 | `IUMGEditorModule::GetWidgetContextMenuExtensibilityManager()` | 扩展 Designer 画布 Widget 右键菜单 |
-| Widget 类型检测 | `FWidgetBlueprintEditor::GetSelectedWidgets()` + `Cast<UImage>` | 获取选中 Widget 并验证类型 |
-| 贴图获取 | `UImage::GetBrush()` → `FSlateBrush::GetResourceObject()` | 从 Image 控件提取 UTexture2D |
-| Python 执行 | `IPythonScriptPlugin::ExecPythonCommand()` | C++ 调用 Python 桥接代码 |
-| PNG 导出 | `unreal.TextureExporterPNG` + `AssetExportTask` | Python 端导出贴图为 PNG |
-| PS 启动 | `subprocess.Popen([photoshop.exe, png_path])` | Python 端启动 Photoshop |
-| 防焦点切换 | CVar `Interchange.FeatureFlags.Import.SyncToBrowser` | reimport 时临时禁用 Content Browser 同步 |
+典型内容包括：
 
-### 跨项目协作（SPsync）
+- 冲突策略
+- Mesh 导入设置
+- 贴图通道编排
+- 输出格式
+- 位深
+- sRGB / mips 等处理规则
 
-AssetCustoms 的 **Send to Substance Painter** 功能与 SP 侧的 [SPsync](https://github.com/xxx/SPsync) 插件协作完成。两者**独立发布**：
+#### Output
+
+负责回答：**最后要生成成什么样？**
+
+典型内容包括：
+
+- 目标路径和子目录
+- 命名模板
+- 母材质与参数绑定
+- 导入默认值
+- 针对不同贴图的 override 规则
+
+这套设计的好处是，规则更容易维护，也更适合长期项目演进。
+
+### 3. 与 SPsync 的关系
+
+AssetCustoms 负责 UE 侧，SPsync 负责 Substance Painter 侧。
+
+两者配合关系如下：
 
 | 插件 | 安装位置 | 职责 |
 |------|----------|------|
-| **AssetCustoms**（本插件） | UE 项目 `Plugins/AssetCustoms/` | 材质收集、FBX/贴图导出、数据包发送、贴图回传刷新 |
-| **SPsync** | SP 插件目录 `...\Substance 3D Painter\python\plugins\SPsync\` | 项目创建、Layer 构建、通道映射、导出、双向同步 |
+| AssetCustoms | UE 项目 `Plugins/AssetCustoms/` | 收集 UE 资产、导出、发送、回传刷新 |
+| SPsync | Substance Painter 插件目录 | 建项目、做通道映射、导出、同步回 UE |
 
-**通信方式**：
-- UE→SP：HTTP POST base64(python_script) → SP Remote Scripting API（localhost:60041）
-- SP→UE：Remote Execution TCP 协议（localhost:6776）
+通信方式：
 
-**前置条件**：
-- SP 以 `--enable-remote-scripting` 参数启动
-- SPsync 插件已安装并启用
-- AssetCustoms `deploy.bat` 已执行
+- UE -> SP：HTTP POST 到 SP Remote Scripting API（默认 `localhost:60041`）
+- SP -> UE：Remote Execution TCP 协议（默认 `localhost:6776`）
 
----
+使用前请确认：
 
-## 配置架构：Input → Processing → Output 三段式模型
+- Substance Painter 以 `--enable-remote-scripting` 启动
+- SPsync 已正确安装并启用
+- AssetCustoms 依赖已部署完成
 
-V2.0 将 V1.1 扁平的配置重构为 **三段式管线模型**，按数据流向将关注点彻底分离：
+### 4. Widget 相关功能的实现思路
 
-```
-┌─────────────────────────────────────────────────────────┐
-│  JSONC Profile（如 Prop.jsonc / Character.jsonc）        │
-├─────────┬──────────────┬────────────────────────────────┤
-│  input  │  processing  │  output                        │
-│─────────│──────────────│────────────────────────────────│
-│ 贴图识别│ 冲突策略     │ 目标路径 / 子目录              │
-│ 规则表  │ Mesh 导入设置│ 命名模板（SM/MI/贴图）         │
-│ (match  │ 贴图处理定义 │ 材质绑定（suffix → MI param）  │
-│  mode + │ (通道编排 +  │ 导入设置默认值                 │
-│  glob/  │  format +    │ 逐贴图 import override 表格    │
-│  regex) │  bit_depth)  │                                │
-└─────────┴──────────────┴────────────────────────────────┘
+这部分不是给普通使用者看的，是给维护者快速建立概念的。
+
+#### 粘贴图片到 Widget
+
+流程如下：
+
+```text
+剪贴板图片 -> 读取像素 -> 计算 MD5 去重 -> 创建 Texture2D -> 保存到 Widget 同目录 -> 创建 UImage -> 刷新 Designer
 ```
 
-### 设计意图
+关键点：
 
-| 问题（V1.1） | 解决方案（V2.0） |
-|--------------|------------------|
-| 扁平结构导致「贴图处理定义」与「UE 导入设置」混杂 | 三段分层：input 只管识别、processing 只管处理、output 只管交付 |
-| 贴图 import override 分散在各处 | 集中到 `output.texture_import_overrides`，按 suffix 统一表格管理 |
-| 材质参数绑定与贴图定义耦合 | `output.material.parameter_bindings` 独立表（suffix → MI param name） |
-| 命名模板位置不直观 | 全部归入 `output.naming`（static_mesh / material_instance / texture 三个模板） |
+- 支持 `CF_DIB` / `CF_DIBV5`
+- 支持 Alpha
+- 重复图片复用已有 Texture
+- 失败时给出明确提示
 
-### 三段职责
+#### Widget 发图到 Photoshop
 
-- **Input**（输入阶段）：定义「从哪里来、怎么识别」。贴图规则表（match_mode + glob/regex + priority），Mesh/Material 规则预留。
-- **Processing**（处理阶段）：定义「怎么加工」。冲突策略、FBX Mesh 导入参数（ADR-0003）、贴图通道编排（Pillow 管道：sources → channels → format/bit_depth/srgb/mips）。
-- **Output**（输出阶段）：定义「往哪里放、叫什么名、怎么绑定」。目标路径、子目录、命名模板、母材质与参数绑定、UE 导入设置默认值与 per-suffix 覆盖。
+流程如下：
 
-### Config Editor UI
-
-Config Editor GUI 严格对应三段式架构，提供 **Input / Processing / Output** 三个页签，支持中英文切换，所有配置字段均可可视化编辑并保存为 JSONC。
-
-> 设计决策详见 [ADR-0002](docs/decisions/ADR-0002-config-v2-pipeline-model.md)。
-
----
-
-## 目录结构
-
+```text
+选中 UImage -> 取出 Brush 里的 Texture2D -> C++ 调 Python -> 导出 PNG -> 启动 Photoshop -> 监控文件变化 -> 自动重导入
 ```
+
+关键点：
+
+- 只在选中有效 Image 控件时显示菜单
+- 通过 `IPythonScriptPlugin::ExecPythonCommand()` 做桥接
+- 自动回写时尽量不打断编辑器工作流
+
+### 5. 目录结构
+
+```text
 AssetCustoms/
-├── AssetCustoms.uplugin        # UE 插件描述文件
-├── deploy.bat                  # ★ 双击部署入口（.bat → .ps1 引导）
-├── deploy.ps1                  # 依赖安装脚本（离线优先 → PyPI 回退）
-├── requirements.txt            # 运行时依赖声明
-├── requirements-dev.txt        # 开发/测试依赖
-├── run_tests.py                # 测试启动器
-├── README.md                   # 本文件
-├── CONTRIBUTING.md             # 贡献指南
-├── SECURITY.md                 # 安全策略
+├── AssetCustoms.uplugin
+├── deploy.bat
+├── deploy.ps1
+├── requirements.txt
+├── requirements-dev.txt
+├── run_tests.py
+├── README.md
+├── CONTRIBUTING.md
+├── SECURITY.md
 ├── Content/
-│   ├── Config/AssetCustoms/    # Profile 配置文件（JSONC）
-│   │   ├── Prop.jsonc
-│   │   └── Character.jsonc
+│   ├── Config/AssetCustoms/
 │   └── Python/
-│       ├── init_unreal.py      # UE Python 入口脚本
-│       ├── core/               # 纯 Python 核心（无 UE 依赖，可独立测试）
-│       │   ├── config/         # 配置解析与 Schema
-│       │   ├── pipeline/       # 检查链、分诊 UI、标准化引擎
-│       │   ├── textures/       # 贴图匹配与通道编排
-│       │   ├── naming.py       # 命名规则与路径计算
-│       │   └── tests/          # 单元测试
-│       ├── unreal_integration/ # UE API 桥接层
-│       └── unreal_qt/          # PySide6 Qt 集成层
-│           ├── __init__.py     # QApp 管理 / tick 挂载 / widget 生命周期
-│           └── dark_bar.py     # 无边框暗色标题栏
-├── vendor/                     # 离线 wheel 包（随插件分发）
-│   ├── pillow-*.whl
-│   ├── pyside6_essentials-*.whl
-│   ├── shiboken6-*.whl
-│   ├── psd_tools-*.whl
-│   ├── attrs-*.whl
-│   ├── typing_extensions-*.whl
-│   └── numpy-*.whl
-├── docs/                       # 项目文档
-│   ├── architecture.md         # 系统架构 / 模块边界 / 数据流
-│   ├── requirements_v1.1.md    # 需求规格
-│   ├── roadmap.md              # 路线图 / 里程碑
-│   ├── testing.md              # 测试说明
-│   └── decisions/              # 架构决策记录（ADR）
-├── standards/                  # 开发规范
-│   ├── coding-style.md
-│   ├── review-checklist.md
-│   └── commit-convention.md
-└── Tests/                      # 集成/E2E 测试脚本
+│       ├── init_unreal.py
+│       ├── core/
+│       ├── unreal_integration/
+│       └── unreal_qt/
+├── vendor/
+├── docs/
+├── standards/
+└── Tests/
 ```
 
----
+### 6. 开发与测试
 
-## 开发与测试
+#### 纯 Python 测试
 
-### 纯 Python 测试（无需 UE）
-
-核心代码 `Content/Python/core/` 可在普通 Python 环境下测试：
+核心逻辑可以不启动 UE，直接在普通 Python 环境下测试：
 
 ```powershell
-# 创建虚拟环境
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# 安装开发依赖
 pip install -r requirements-dev.txt
-
-# 运行测试
 python run_tests.py
-# 或
+
+# 或者
 pytest Content/Python/core/tests/ -v --tb=short
 ```
 
-### UE 编辑器内验证
+#### UE 编辑器内验证
 
-1. 启动 UE 编辑器加载项目
-2. 打开 Output Log（Window → Developer Tools → Output Log）
-3. 筛选 `LogPython` 查看插件初始化日志
-4. Content Browser 工具栏应出现 "AssetCustoms" 下拉菜单
+1. 启动 UE 编辑器
+2. 打开项目
+3. 打开 Output Log
+4. 搜索 `LogPython`
+5. 检查工具栏和右键菜单是否正常出现
 
-### 开发提示
+#### 开发提示
 
-- UE 缓存已导入的 Python 模块，修改 `.py` 后需 `importlib.reload()` 或重启编辑器
-- 变更公共行为时请更新文档并考虑补充 ADR
-- 避免阻塞主线程的耗时操作
+- UE 会缓存已导入的 Python 模块，改完 `.py` 后通常需要 `importlib.reload()` 或重启编辑器
+- 变更公共行为时，建议同步更新文档
+- 尽量避免在主线程里做长时间阻塞操作
 
----
-
-## 文档导航
+### 7. 文档导航
 
 | 文档 | 说明 |
 |------|------|
-| [`docs/roadmap.md`](docs/roadmap.md) | 路线图、里程碑与进度 |
-| [`docs/architecture.md`](docs/architecture.md) | 系统架构、模块边界、数据流 |
-| [`docs/requirements_v1.1.md`](docs/requirements_v1.1.md) | V1.1 详细需求规格 |
-| [`docs/testing.md`](docs/testing.md) | 测试说明与环境配置 |
-| [`docs/decisions/`](docs/decisions/) | 架构决策记录（ADR） |
-| [`standards/coding-style.md`](standards/coding-style.md) | 编码规范（Google Python） |
-| [`standards/review-checklist.md`](standards/review-checklist.md) | Code Review 检查单 |
-| [`standards/commit-convention.md`](standards/commit-convention.md) | 提交规范（Conventional Commits） |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | 贡献指南 |
-| [`SECURITY.md`](SECURITY.md) | 安全策略 |
+| [docs/roadmap.md](docs/roadmap.md) | 路线图、里程碑与进度 |
+| [docs/architecture.md](docs/architecture.md) | 系统架构、模块边界、数据流 |
+| [docs/requirements_v1.1.md](docs/requirements_v1.1.md) | V1.1 需求规格 |
+| [docs/testing.md](docs/testing.md) | 测试说明与环境配置 |
+| [docs/decisions/](docs/decisions/) | 架构决策记录 |
+| [standards/coding-style.md](standards/coding-style.md) | 编码规范 |
+| [standards/review-checklist.md](standards/review-checklist.md) | Code Review 检查单 |
+| [standards/commit-convention.md](standards/commit-convention.md) | 提交规范 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 贡献指南 |
+| [SECURITY.md](SECURITY.md) | 安全策略 |
 
 ---
 
 ## 常见问题
 
-### Q: 双击 deploy.bat 闪退 / 无反应？
+### 双击 deploy.bat 没反应怎么办？
 
-检查 PowerShell 是否可用：在命令行输入 `powershell --version`。Windows 10+ 系统均自带 PowerShell 5.1。
+先确认 PowerShell 是否可用。Windows 终端里执行：
 
-### Q: 安装报错 "pip not found"？
+```powershell
+powershell --version
+```
 
-UE 内置 Python 已包含 pip。确认 UE 引擎路径正确，或使用 `-PythonExe` 参数手动指定：
+Windows 10/11 一般都自带 PowerShell 5.1。
+
+### 提示找不到 pip 怎么办？
+
+UE 自带 Python 默认包含 pip。你可以手动指定解释器：
+
 ```batch
 deploy.bat -PythonExe "C:\Program Files\Epic Games\UE_5.7\Engine\Binaries\ThirdParty\Python3\Win64\python.exe"
 ```
 
-### Q: vendor/ 里的 wheel 版本不匹配当前 Python？
+### vendor 里的 wheel 和当前 Python 不匹配怎么办？
 
-wheel 文件包名中的 `cp311` 表示 Python 3.11（UE 5.7 内置版本）。如果引擎版本不同，使用在线安装：
+当前内置 wheel 主要面向 UE 5.7 的 Python 3.11。版本不匹配时，直接走在线安装：
+
 ```batch
 deploy.bat -Online
 ```
 
-### Q: 重新安装 / 升级依赖？
+### 想重新安装依赖怎么办？
 
 ```batch
 deploy.bat -Clean
 ```
-此命令会先清理已安装的 PIL、PySide6、shiboken6、psd_tools、numpy 等目录，再重新安装。
 
-### Q: UE 编辑器中看不到 AssetCustoms 菜单？
+它会先清理旧依赖，再重新安装。
 
-1. 确认 `AssetCustoms.uplugin` 所在目录位于项目 `Plugins/` 下
-2. 确认 `deploy.bat` 已成功运行（窗口显示 "Installation complete!"）
-3. 检查 UE Output Log 中 `LogPython` 的错误信息
-4. 编辑器 → Edit → Plugins → 搜索 "AssetCustoms" 确认已启用
+### 编辑器里看不到 AssetCustoms 菜单怎么办？
 
-### Q: 如何使用 Send to Photoshop？
+按这个顺序排查：
 
-**方式一：Content Browser（选中资产）**
-1. 在 Content Browser 中选中一个或多个 Texture2D 资产
-2. 右键 → **Send** → **Send to Photoshop**（PSD 格式）或 **Send to Photoshop as PNG**
-3. 插件会自动导出贴图，启动 Photoshop 打开
-4. 在 Photoshop 中编辑并保存后，贴图会自动重新导入到 UE（保留压缩、sRGB、LOD 设置）
-5. 关闭 Photoshop 后临时文件自动清理
+1. 确认插件目录在项目的 `Plugins/` 下
+2. 确认 `deploy.bat` 已成功执行
+3. 看 UE Output Log 里的 `LogPython` 报错
+4. 在 Edit -> Plugins 里确认 AssetCustoms 已启用
 
-**方式二：Widget Blueprint 编辑器（右键 Image 控件）**
-1. 在 Widget Blueprint 的 Designer 视图中选中一个 Image 控件
-2. 右键 → **Send to Photoshop (PNG)**
-3. 控件绑定的贴图会以 PNG 格式发送到 Photoshop
-4. 编辑保存后自动回写，Widget 编辑器焦点不会被切走
+### 怎么用 Send to Photoshop？
 
-> 需要系统已安装 Adobe Photoshop（自动搜索 `C:\Program Files\Adobe\` 路径）。
+#### Content Browser 里使用
 
-### Q: 如何使用 Send to Substance Painter？
+1. 选中一个或多个 Texture2D
+2. 右键 `Send -> Send to Photoshop` 或 `Send to Photoshop as PNG`
+3. Photoshop 打开后直接修改并保存
+4. UE 会自动重新导入
 
-**方式一：Content Browser（选中资产）**
-1. 在 Content Browser 中选中一个 **StaticMesh** 资产
-2. 右键 → **Send** → **Send to Substance Painter**
+#### Widget 编辑器里使用
 
-**方式二：Level Editor 视口（选中 Actor）**
-1. 在关卡视口中选中一个含 **StaticMeshComponent** 的 Actor
-2. 右键 → **Send** → **Send to Substance Painter**
-3. 插件自动从 Actor 提取绑定的 StaticMesh，后续流程与 Content Browser 一致
+1. 打开 Widget Blueprint
+2. 在 Designer 里选中一个 Image 控件
+3. 右键 `Send to Photoshop (PNG)`
+4. 修改保存后会自动回写到 UE
 
-**通用流程**：
-3. 插件自动收集材质信息、导出 FBX 和贴图，发送到 SP 创建项目
-4. SP 中自动创建 Fill Layer 并按 Config Profile 的 `parameter_bindings` 映射通道
-5. 在 SP 中编辑贴图后点击 **SYNC**，自动按 UE 原来的路径和格式回传刷新
+### 怎么用 Send to Substance Painter？
 
-> **前置条件**：SP 以 `--enable-remote-scripting` 启动，SPsync 插件已安装。
-> **Config Profile**：导入时自动打标签到 SM/MI 元数据，Send to SP 时读取并驱动映射。支持 Content Browser 右键 View/Set/Clear Profile。
+#### Content Browser 里使用
 
-### Q: max_resolution 如何控制贴图尺寸？
+1. 选中一个 StaticMesh
+2. 右键 `Send -> Send to Substance Painter`
 
-`max_resolution` 是一个 **整数**（POT 值，如 512、1024、2048、4096），定义在 `processing.texture_definitions[].max_resolution` 和 `output.texture_import_defaults.max_resolution` 中。全管线统一生效：
-- **UE 导入**：设置 `max_texture_size` 属性限制运行时分辨率
-- **SP 项目创建**：作为 `default_texture_resolution` 初始化 TextureSet 分辨率
-- **SP 导出**：转换为 `sizeLog2` 控制导出尺寸
+#### Level Editor 里使用
+
+1. 在视口里选中带 StaticMeshComponent 的 Actor
+2. 右键 `Send -> Send to Substance Painter`
+3. 插件会自动提取对应 StaticMesh，并沿用同一套流程
+
+通用流程是：
+
+1. UE 收集材质和贴图信息
+2. 导出 FBX 与贴图
+3. 发送到 SP 建项目
+4. SP 里编辑完成后通过 SYNC 回传
+
+### `max_resolution` 是做什么的？
+
+它是整条管线里的统一贴图尺寸控制项。
+
+例如设成 `1024`，它会同时影响：
+
+- UE 导入时的最大贴图尺寸
+- SP 项目创建时的默认分辨率
+- SP 导出时的输出尺寸
+
+如果你想控制项目贴图规格，这个参数很关键。
 
 ---
 
-如需贡献或提问，请先阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)。
+如需贡献或提问，请先阅读 [CONTRIBUTING.md](CONTRIBUTING.md)。
