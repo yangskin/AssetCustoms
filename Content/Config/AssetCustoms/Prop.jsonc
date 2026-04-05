@@ -351,7 +351,7 @@
       "address_x": "Wrap",
       "address_y": "Wrap",
       "mip_gen": "FromTextureGroup",
-      "max_resolution": 1024
+      "max_resolution": 2048
     },
     "texture_import_overrides": {
       "D": {
@@ -360,7 +360,7 @@
       "N": {
         "compression": "TC_Normalmap",
         "lod_group": "TEXTUREGROUP_WorldNormalMap",
-        "max_resolution": 512
+        "max_resolution": 2048
       },
       "MRO": {
         "compression": "TC_Masks",

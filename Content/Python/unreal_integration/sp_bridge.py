@@ -676,7 +676,7 @@ class SPBridge:
         options.set_editor_property("level_of_detail", False)
         options.set_editor_property("vertex_color", True)
         options.set_editor_property("ascii", True)
-        options.set_editor_property("force_front_x_axis", True)
+        options.set_editor_property("force_front_x_axis", False)
         options.set_editor_property("fbx_export_compatibility", unreal.FbxExportCompatibility.FBX_2016)
         options.set_editor_property("collision", False)
 
