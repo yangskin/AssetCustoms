@@ -1,73 +1,115 @@
-#include "SendToPhotoshopAction.h"
+#include "../Public/SendToPhotoshopAction.h"
 
+#include "ClipboardImageUtils.h"
+#include "WidgetReplaceTextureFromClipboardAction.h"
+
+#include "Components/Image.h"
+#include "Engine/Texture2D.h"
+#include "Framework/MultiBox/MultiBoxBuilder.h"
+#include "IPythonScriptPlugin.h"
+#include "Styling/SlateBrush.h"
 #include "WidgetBlueprintEditor.h"
 #include "WidgetReference.h"
-#include "Components/Image.h"
-#include "Styling/SlateBrush.h"
-#include "IPythonScriptPlugin.h"
-#include "Framework/MultiBox/MultiBoxBuilder.h"
 
 #define LOCTEXT_NAMESPACE "AssetCustomsEditor"
+
+namespace
+{
+    bool TryGetSelectedImage(FWidgetBlueprintEditor* BlueprintEditor, UImage*& OutImage, UTexture2D*& OutTexture)
+    {
+        OutImage = nullptr;
+        OutTexture = nullptr;
+
+        if (!BlueprintEditor)
+        {
+            return false;
+        }
+
+        const TSet<FWidgetReference>& SelectedWidgets = BlueprintEditor->GetSelectedWidgets();
+        if (SelectedWidgets.Num() != 1)
+        {
+            return false;
+        }
+
+        const FWidgetReference& WidgetRef = *SelectedWidgets.CreateConstIterator();
+        OutImage = Cast<UImage>(WidgetRef.GetTemplate());
+        if (!OutImage)
+        {
+            return false;
+        }
+
+        const FSlateBrush& Brush = OutImage->GetBrush();
+        OutTexture = Cast<UTexture2D>(Brush.GetResourceObject());
+        return true;
+    }
+}
 
 void FSendToPhotoshopExtension::ExtendContextMenu(
     FMenuBuilder& MenuBuilder,
     TSharedRef<FWidgetBlueprintEditor> BlueprintEditor,
     FVector2D TargetLocation) const
 {
-    // Check if exactly one Image widget is selected
-    const TSet<FWidgetReference>& SelectedWidgets = BlueprintEditor->GetSelectedWidgets();
-    if (SelectedWidgets.Num() != 1)
+    UImage* ImageWidget = nullptr;
+    UTexture2D* Texture = nullptr;
+    if (!TryGetSelectedImage(&BlueprintEditor.Get(), ImageWidget, Texture))
     {
         return;
     }
 
-    const FWidgetReference& WidgetRef = *SelectedWidgets.CreateConstIterator();
-    UWidget* Widget = WidgetRef.GetTemplate();
-    UImage* ImageWidget = Cast<UImage>(Widget);
-    if (!ImageWidget)
-    {
-        return;
-    }
-
-    const FSlateBrush& Brush = ImageWidget->GetBrush();
-    UObject* ResourceObject = Brush.GetResourceObject();
-    UTexture2D* Texture = Cast<UTexture2D>(ResourceObject);
-    if (!Texture)
-    {
-        return;
-    }
-
-    FString AssetPath = Texture->GetPathName();
+    const FString AssetPath = Texture ? Texture->GetPathName() : FString();
+    TWeakPtr<FWidgetBlueprintEditor> WeakBlueprintEditor(BlueprintEditor);
 
     MenuBuilder.BeginSection(TEXT("AssetCustomsPhotoshop"), LOCTEXT("PhotoshopSection", "AssetCustoms"));
     {
         MenuBuilder.AddMenuEntry(
-            LOCTEXT("SendToPhotoshop", "Send to Photoshop (PNG)"),
-            LOCTEXT("SendToPhotoshopTooltip", "Export this Image's texture as PNG and open in Photoshop"),
+            LOCTEXT("ReplaceTextureFromClipboard", "Replace Texture from Clipboard"),
+            LOCTEXT("ReplaceTextureFromClipboardTooltip", "Reimport the selected Image's texture from the clipboard, or create and assign a texture when the brush is empty"),
             FSlateIcon(),
             FUIAction(
-                FExecuteAction::CreateLambda([AssetPath]()
+                FExecuteAction::CreateLambda([WeakBlueprintEditor]()
                 {
-                    IPythonScriptPlugin* PythonPlugin = IPythonScriptPlugin::Get();
-                    if (!PythonPlugin || !PythonPlugin->IsPythonAvailable())
+                    TSharedPtr<FWidgetBlueprintEditor> PinnedBlueprintEditor = WeakBlueprintEditor.Pin();
+                    if (PinnedBlueprintEditor.IsValid())
                     {
-                        UE_LOG(LogTemp, Warning, TEXT("PythonScriptPlugin is not available"));
-                        return;
+                        WidgetReplaceTextureFromClipboardAction::Execute(PinnedBlueprintEditor.Get());
                     }
-
-                    // Escape backslashes and single quotes for Python string
-                    FString EscapedPath = AssetPath.Replace(TEXT("\\"), TEXT("\\\\")).Replace(TEXT("'"), TEXT("\\'"));
-                    FString PythonCommand = FString::Printf(
-                        TEXT("from unreal_integration.photoshop_bridge import PhotoshopBridge; PhotoshopBridge().open_texture_by_path_as_png('%s')"),
-                        *EscapedPath);
-
-                    if (!PythonPlugin->ExecPythonCommand(*PythonCommand))
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("SendToPhotoshop: Python command failed for '%s'"), *AssetPath);
-                    }
+                }),
+                FCanExecuteAction::CreateLambda([]()
+                {
+                    return ClipboardImageUtils::HasClipboardImage();
                 })
             )
         );
+
+        if (Texture)
+        {
+            MenuBuilder.AddMenuEntry(
+                LOCTEXT("SendToPhotoshop", "Send to Photoshop (PNG)"),
+                LOCTEXT("SendToPhotoshopTooltip", "Export this Image's texture as PNG and open in Photoshop"),
+                FSlateIcon(),
+                FUIAction(
+                    FExecuteAction::CreateLambda([AssetPath]()
+                    {
+                        IPythonScriptPlugin* PythonPlugin = IPythonScriptPlugin::Get();
+                        if (!PythonPlugin || !PythonPlugin->IsPythonAvailable())
+                        {
+                            UE_LOG(LogTemp, Warning, TEXT("PythonScriptPlugin is not available"));
+                            return;
+                        }
+
+                        const FString EscapedPath = AssetPath.Replace(TEXT("\\"), TEXT("\\\\")).Replace(TEXT("'"), TEXT("\\'"));
+                        const FString PythonCommand = FString::Printf(
+                            TEXT("from unreal_integration.photoshop_bridge import PhotoshopBridge; PhotoshopBridge().open_texture_by_path_as_png('%s')"),
+                            *EscapedPath);
+
+                        if (!PythonPlugin->ExecPythonCommand(*PythonCommand))
+                        {
+                            UE_LOG(LogTemp, Warning, TEXT("SendToPhotoshop: Python command failed for '%s'"), *AssetPath);
+                        }
+                    })
+                )
+            );
+        }
     }
     MenuBuilder.EndSection();
 }

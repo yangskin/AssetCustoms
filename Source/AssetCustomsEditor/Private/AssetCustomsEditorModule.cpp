@@ -1,6 +1,7 @@
-#include "AssetCustomsEditorModule.h"
+#include "../Public/AssetCustomsEditorModule.h"
 #include "WidgetPasteImageAction.h"
-#include "SendToPhotoshopAction.h"
+#include "WidgetReplaceTextureFromClipboardAction.h"
+#include "../Public/SendToPhotoshopAction.h"
 
 #include "WidgetBlueprintEditor.h"
 #include "WidgetBlueprint.h"
@@ -37,15 +38,22 @@ public:
             "Paste clipboard image as a new Image widget with auto-imported texture",
             EUserInterfaceActionType::Button,
             FInputChord(EModifierKey::Control | EModifierKey::Shift, EKeys::V));
+
+        UI_COMMAND(ReplaceTextureFromClipboard,
+            "Replace Image Texture from Clipboard",
+            "Reimport the selected Image widget's texture, or create and assign a texture for an empty brush, from clipboard image data",
+            EUserInterfaceActionType::Button,
+            FInputChord(EModifierKey::Control | EModifierKey::Alt | EModifierKey::Shift, EKeys::V));
     }
 
     TSharedPtr<FUICommandInfo> PasteImageFromClipboard;
+    TSharedPtr<FUICommandInfo> ReplaceTextureFromClipboard;
 };
 
 /**
- * Find the currently active Widget Blueprint being edited.
+ * Find the currently active Widget Blueprint editor.
  */
-static UWidgetBlueprint* GetActiveWidgetBlueprint()
+static FWidgetBlueprintEditor* GetActiveWidgetBlueprintEditor()
 {
     UAssetEditorSubsystem* AssetEditorSubsystem = GEditor->GetEditorSubsystem<UAssetEditorSubsystem>();
     if (!AssetEditorSubsystem)
@@ -62,12 +70,18 @@ static UWidgetBlueprint* GetActiveWidgetBlueprint()
             IAssetEditorInstance* Editor = AssetEditorSubsystem->FindEditorForAsset(Asset, false);
             if (Editor)
             {
-                return WidgetBP;
+                return static_cast<FWidgetBlueprintEditor*>(Editor);
             }
         }
     }
 
     return nullptr;
+}
+
+static UWidgetBlueprint* GetActiveWidgetBlueprint()
+{
+    FWidgetBlueprintEditor* WidgetBlueprintEditor = GetActiveWidgetBlueprintEditor();
+    return WidgetBlueprintEditor ? WidgetBlueprintEditor->GetWidgetBlueprintObj() : nullptr;
 }
 
 static void ExecutePasteImageCommand()
@@ -77,6 +91,16 @@ static void ExecutePasteImageCommand()
     {
         WidgetPasteImageAction::Execute(WidgetBP);
     }
+}
+
+static bool CanExecuteReplaceTextureCommand()
+{
+    return WidgetReplaceTextureFromClipboardAction::CanExecute(GetActiveWidgetBlueprintEditor());
+}
+
+static void ExecuteReplaceTextureCommand()
+{
+    WidgetReplaceTextureFromClipboardAction::Execute(GetActiveWidgetBlueprintEditor());
 }
 
 void FAssetCustomsEditorModule::StartupModule()
@@ -95,6 +119,9 @@ void FAssetCustomsEditorModule::StartupModule()
                 this, &FAssetCustomsEditorModule::OnAssetOpenedInEditor);
         }
     }
+
+    ModulesChangedDelegateHandle = FModuleManager::Get().OnModulesChanged().AddRaw(
+        this, &FAssetCustomsEditorModule::HandleModulesChanged);
 }
 
 void FAssetCustomsEditorModule::ShutdownModule()
@@ -110,7 +137,38 @@ void FAssetCustomsEditorModule::ShutdownModule()
 
     UnregisterWidgetContextMenuExtension();
     UnregisterWidgetEditorMenu();
+
+    if (ModulesChangedDelegateHandle.IsValid())
+    {
+        FModuleManager::Get().OnModulesChanged().Remove(ModulesChangedDelegateHandle);
+        ModulesChangedDelegateHandle.Reset();
+    }
+
     FAssetCustomsCommands::Unregister();
+}
+
+void FAssetCustomsEditorModule::HandleModulesChanged(FName ModuleName, EModuleChangeReason Reason)
+{
+    if (ModuleName != TEXT("UMGEditor") || Reason != EModuleChangeReason::ModuleLoaded)
+    {
+        return;
+    }
+
+    IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
+
+    if (WidgetMenuExtender.IsValid())
+    {
+        TSharedPtr<FExtensibilityManager> MenuExtManager = UMGEditorModule.GetMenuExtensibilityManager();
+        if (MenuExtManager.IsValid())
+        {
+            MenuExtManager->AddExtender(WidgetMenuExtender);
+        }
+    }
+
+    if (SendToPhotoshopExtension.IsValid())
+    {
+        UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->AddExtension(SendToPhotoshopExtension.ToSharedRef());
+    }
 }
 
 void FAssetCustomsEditorModule::OnAssetOpenedInEditor(UObject* Asset, IAssetEditorInstance* EditorInstance)
@@ -122,7 +180,7 @@ void FAssetCustomsEditorModule::OnAssetOpenedInEditor(UObject* Asset, IAssetEdit
     }
 
     FWidgetBlueprintEditor* WBEditor = static_cast<FWidgetBlueprintEditor*>(EditorInstance);
-    const TSharedRef<FUICommandList>& ToolkitCommands = WBEditor->GetToolkitCommands();
+    const TSharedRef<FUICommandList>& ToolkitCommands = static_cast<FBlueprintEditor*>(WBEditor)->GetToolkitCommands();
 
     // Only bind if not already mapped (editor may reuse instance)
     if (!ToolkitCommands->IsActionMapped(FAssetCustomsCommands::Get().PasteImageFromClipboard))
@@ -131,6 +189,14 @@ void FAssetCustomsEditorModule::OnAssetOpenedInEditor(UObject* Asset, IAssetEdit
             FAssetCustomsCommands::Get().PasteImageFromClipboard,
             FExecuteAction::CreateStatic(&ExecutePasteImageCommand),
             FCanExecuteAction::CreateLambda([]() { return true; }));
+    }
+
+    if (!ToolkitCommands->IsActionMapped(FAssetCustomsCommands::Get().ReplaceTextureFromClipboard))
+    {
+        ToolkitCommands->MapAction(
+            FAssetCustomsCommands::Get().ReplaceTextureFromClipboard,
+            FExecuteAction::CreateStatic(&ExecuteReplaceTextureCommand),
+            FCanExecuteAction::CreateStatic(&CanExecuteReplaceTextureCommand));
     }
 }
 
@@ -142,6 +208,10 @@ void FAssetCustomsEditorModule::RegisterWidgetEditorMenu()
         FAssetCustomsCommands::Get().PasteImageFromClipboard,
         FExecuteAction::CreateStatic(&ExecutePasteImageCommand),
         FCanExecuteAction::CreateLambda([]() { return true; }));
+    CommandList->MapAction(
+        FAssetCustomsCommands::Get().ReplaceTextureFromClipboard,
+        FExecuteAction::CreateStatic(&ExecuteReplaceTextureCommand),
+        FCanExecuteAction::CreateStatic(&CanExecuteReplaceTextureCommand));
 
     // Create menu extender for Widget Blueprint editor
     WidgetMenuExtender = MakeShared<FExtender>();
@@ -154,6 +224,7 @@ void FAssetCustomsEditorModule::RegisterWidgetEditorMenu()
             MenuBuilder.BeginSection(TEXT("AssetCustomsPaste"), LOCTEXT("AssetCustomsPasteSection", "AssetCustoms"));
             {
                 MenuBuilder.AddMenuEntry(FAssetCustomsCommands::Get().PasteImageFromClipboard);
+                MenuBuilder.AddMenuEntry(FAssetCustomsCommands::Get().ReplaceTextureFromClipboard);
             }
             MenuBuilder.EndSection();
         }));
@@ -167,23 +238,6 @@ void FAssetCustomsEditorModule::RegisterWidgetEditorMenu()
         {
             MenuExtManager->AddExtender(WidgetMenuExtender);
         }
-    }
-    else
-    {
-        FModuleManager::Get().OnModulesChanged().AddLambda(
-            [this](FName ModuleName, EModuleChangeReason Reason)
-            {
-                if (ModuleName == TEXT("UMGEditor") && Reason == EModuleChangeReason::ModuleLoaded
-                    && WidgetMenuExtender.IsValid())
-                {
-                    IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
-                    TSharedPtr<FExtensibilityManager> MenuExtManager = UMGEditorModule.GetMenuExtensibilityManager();
-                    if (MenuExtManager.IsValid())
-                    {
-                        MenuExtManager->AddExtender(WidgetMenuExtender);
-                    }
-                }
-            });
     }
 }
 
@@ -209,19 +263,6 @@ void FAssetCustomsEditorModule::RegisterWidgetContextMenuExtension()
     {
         IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
         UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->AddExtension(SendToPhotoshopExtension.ToSharedRef());
-    }
-    else
-    {
-        FModuleManager::Get().OnModulesChanged().AddLambda(
-            [this](FName ModuleName, EModuleChangeReason Reason)
-            {
-                if (ModuleName == TEXT("UMGEditor") && Reason == EModuleChangeReason::ModuleLoaded
-                    && SendToPhotoshopExtension.IsValid())
-                {
-                    IUMGEditorModule& UMGEditorModule = FModuleManager::GetModuleChecked<IUMGEditorModule>(TEXT("UMGEditor"));
-                    UMGEditorModule.GetWidgetContextMenuExtensibilityManager()->AddExtension(SendToPhotoshopExtension.ToSharedRef());
-                }
-            });
     }
 }
 
