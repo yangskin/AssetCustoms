@@ -131,14 +131,18 @@ void WidgetPasteImageAction::Execute(UWidgetBlueprint* WidgetBlueprint)
         return;
     }
 
-    ImageWidget->SetBrushFromTexture(Texture, true);
+    const FVector2D ImageSize(static_cast<float>(ClipboardData.Width), static_cast<float>(ClipboardData.Height));
+
+    ImageWidget->SetBrushFromTexture(Texture, false);
+    ImageWidget->SetDesiredSizeOverride(ImageSize);
 
     if (TargetCanvas)
     {
         UCanvasPanelSlot* Slot = TargetCanvas->AddChildToCanvas(ImageWidget);
         if (Slot)
         {
-            Slot->SetAutoSize(true);
+            Slot->SetAutoSize(false);
+            Slot->SetSize(ImageSize);
         }
     }
     else
